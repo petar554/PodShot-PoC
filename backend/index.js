@@ -1,87 +1,53 @@
 /**
- * Minimal Express server to:
  *   1) Accept an uploaded screenshot (multer)
- *   2) OCR the image (Tesseract)
- *   3) Extract show name + timestamp (OCR or fallback GPT)
- *   4) Query Apple iTunes Search API to get the official RSS feed URL
- *   5) Parse the RSS feed to find a real audio file
- *   6) Download the audio, extract 5s around the timestamp
- *   7) Transcribe snippet (OpenAI Whisper)
+ *   2) Use Google Gemini to parse show name + timestamp from the screenshot (multimodal)
+ *   3) iTunes search => feedUrl
+ *   4) Parse feed => real audio link
+ *   5) Extract 5s around timestamp
  */
 
-// require('dotenv').config();
-// const openaiModule = require("openai");
-// const Configuration = openaiModule.Configuration;
-// const OpenAIApi = openaiModule.OpenAIApi;
-// const express = require('express');
-// const multer = require('multer');
-// const Tesseract = require('tesseract.js');
-// const fs = require('fs');
-// const path = require('path');
-// const axios = require('axios');
-// const ffmpeg = require('fluent-ffmpeg');
-// const Parser = require('rss-parser');
 import "dotenv/config";
-import OpenAI from "openai";
 import express from "express";
 import multer from "multer";
 import fs from "fs";
 import axios from "axios";
 import ffmpeg from "fluent-ffmpeg";
 import Parser from "rss-parser";
-// import tesseract from 'tesseract.js';
-import tesseract from 'node-tesseract-ocr';
-// import { createWorker } from 'tesseract.js'; // add this import at the top (if not already present)
-import { createRequire } from 'module';
-import { extname } from 'path';
-import { pathToFileURL } from "url";
-import { fileURLToPath } from "url";
 import path from "path";
+import { fileURLToPath } from "url";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const app = express();
-const PORT = 4000;
-const require = createRequire(import.meta.url);
-
+// for ESM __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const config = {
-  lang: 'eng',  // Language of OCR
-  oem: 1,       // OCR Engine mode
-  psm: 3        // Page segmentation mode
-};
-
-// Multer for file uploads
+// Multer config
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/");
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + extname(file.originalname));
-  }
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
 });
 const upload = multer({ storage });
 
+const app = express();
+const PORT = 4000;
 
-// OpenAI config
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY; 
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+// CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  next();
 });
 
-// RSS parser instance
 const rssParser = new Parser();
 
-/**
- * Attempt to parse a timestamp from text, in the form HH:MM:SS or MM:SS
- */
+/** parse a HH:MM:SS or HH:MM timestamp from text. */
 function parseTimestamp(text) {
-  const timeRegex = /(\d{1,2}):(\d{2})(?::(\d{2}))?/;
-  const match = text.match(timeRegex);
-  if (!match) return null;
-
-  let hours = 0,
-    minutes = 0,
-    seconds = 0;
+  const match = text.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return 0;
+  let hours = 0, minutes = 0, seconds = 0;
   if (match[3]) {
     hours = parseInt(match[1], 10);
     minutes = parseInt(match[2], 10);
@@ -93,90 +59,112 @@ function parseTimestamp(text) {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-/**
- * If OCR doesn't find needed data, use GPT to parse "podcast title" + "timestamp" from text.
- */
-async function parseWithOpenAI(ocrText) {
-  const prompt = `
-I have the following text from a podcast player's screenshot:
----
-${ocrText}
----
-Extract two fields in strict JSON only:
-{"title": "<podcast title or empty>", "timestamp": "<HH:MM or HH:MM:SS or empty>"}
-No extra text, JSON only.
-  `;
-
+async function parseWithGemini(imagePath) {
   try {
-    const resp = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0,
-    });
-    const content = resp.data.choices[0].message.content.trim();
-    return JSON.parse(content);
+    console.log("Starting Gemini analysis...");
+    
+    if (!fs.existsSync(imagePath)) {
+      throw new Error(`Image file not found at path: ${imagePath}`);
+    }
+    
+    const imageData = fs.readFileSync(imagePath);
+    const imageBase64 = imageData.toString('base64');
+    
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    const imagePart = {
+      inlineData: {
+        data: imageBase64,
+        mimeType: "image/jpeg",
+      },
+    };
+    
+    const prompt = `
+    This is a screenshot from a podcast player. Extract exactly two pieces of information:
+    1. The podcast title (name of the show)
+    2. The current timestamp shown in the player (in format HH:MM:SS or MM:SS)
+    
+    Return ONLY a JSON object with these two fields:
+    {"title": "podcast title here", "timestamp": "00:00:00"}
+    
+    If you can't find one of these values, use an empty string for that field.
+    `;
+    
+    const result = await model.generateContent([prompt, imagePart]);
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log("Gemini raw response:", text);
+    
+    const jsonMatch = text.match(/\{[\s\S]*"title"[\s\S]*"timestamp"[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (err) {
+        console.error("Error parsing JSON from Gemini response:", err);
+        // Try a simpler approach to extract information
+        const titleMatch = text.match(/"title"\s*:\s*"([^"]*)"/);
+        const timestampMatch = text.match(/"timestamp"\s*:\s*"([^"]*)"/);
+        return {
+          title: titleMatch ? titleMatch[1] : "",
+          timestamp: timestampMatch ? timestampMatch[1] : ""
+        };
+      }
+    }
+    
+    console.error("Could not extract JSON from Gemini response");
+    return { title: "", timestamp: "" };
   } catch (err) {
-    console.error("OpenAI parse error:", err.message);
+    console.error("Gemini analysis error:", err.message);
     return { title: "", timestamp: "" };
   }
 }
 
-/**
- * Query Apple's iTunes Search API for the show name, returning the official feedUrl
- */
+/** iTunes search  */
 async function getFeedUrlFromiTunes(showName) {
-  if (!showName) {
-    throw new Error("No show name provided to iTunes search");
+  if (!showName) throw new Error("No show name for iTunes search.");
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(showName)}&entity=podcast`;
+  
+  try {
+    const resp = await axios.get(url, { timeout: 10000 });
+    if (resp.data.resultCount === 0) {
+      throw new Error(`No podcast found on iTunes for: ${showName}`);
+    }
+    const first = resp.data.results[0];
+    if (!first.feedUrl) {
+      throw new Error(`No feedUrl in iTunes result for show: ${showName}`);
+    }
+    return first.feedUrl;
+  } catch (err) {
+    console.error("iTunes search error:", err.message);
+    throw new Error(`Failed to search iTunes: ${err.message}`);
   }
-
-  // Example: https://itunes.apple.com/search?term=The+Daily&entity=podcast
-  const apiUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(
-    showName
-  )}&entity=podcast`;
-
-  const response = await axios.get(apiUrl);
-  if (response.data.resultCount === 0) {
-    throw new Error(`No podcast found on iTunes for show name: ${showName}`);
-  }
-
-  // For simplicity, pick the first result.
-  // In a real scenario, you'd compare 'collectionName' to ensure you have the right one.
-  const firstResult = response.data.results[0];
-  if (!firstResult.feedUrl) {
-    throw new Error(`No feedUrl in iTunes result for show: ${showName}`);
-  }
-  return firstResult.feedUrl;
 }
 
-/**
- * Parse the feed URL to get an actual MP3 link.
- * For demonstration, we pick the first item’s enclosure.
- * In production, you might match the episode name or date.
- */
+/** parse feed => mp3 link */
 async function getPodcastAudioFromFeed(feedUrl) {
-  const feed = await rssParser.parseURL(feedUrl);
-  if (!feed.items || feed.items.length === 0) {
-    throw new Error("No items found in the RSS feed.");
-  }
+  try {
+    const feed = await rssParser.parseURL(feedUrl);
+    if (!feed.items?.length) {
+      throw new Error("No items in RSS feed.");
+    }
 
-  // Just pick the first item for a minimal POC
-  const firstItem = feed.items[0];
-  if (!firstItem.enclosure || !firstItem.enclosure.url) {
-    throw new Error("No enclosure URL in the first feed item.");
+    const firstItem = feed.items[0];
+    if (!firstItem.enclosure?.url) {
+      throw new Error("No enclosure URL in the feed item.");
+    }
+    return firstItem.enclosure.url;
+  } catch (err) {
+    console.error("Feed parsing error:", err.message);
+    throw new Error(`Failed to parse feed: ${err.message}`);
   }
-
-  return firstItem.enclosure.url;
 }
 
-/**
- * Extract 5 seconds around the timestamp with FFmpeg
- * (start at timestamp-2, total 5 seconds).
- */
-function extractAudioSnippet(timestamp, inputPath, outputPath) {
+/** demo: extract 5s around timestamp with FFmpeg */
+function extractAudioSnippet(timestampSecs, inputPath, outputPath) {
   return new Promise((resolve, reject) => {
-    let start = timestamp - 2;
+    let start = timestampSecs - 2;
     if (start < 0) start = 0;
-
     ffmpeg(inputPath)
       .setStartTime(start)
       .setDuration(5)
@@ -187,135 +175,93 @@ function extractAudioSnippet(timestamp, inputPath, outputPath) {
   });
 }
 
-/**
- * Transcribe the snippet using OpenAI Whisper
- */
-async function transcribeAudio(snippetPath) {
-  try {
-    const resp = await openai.createTranscription(
-      fs.createReadStream(snippetPath),
-      "whisper-1"
-    );
-    return resp.data.text;
-  } catch (err) {
-    console.error("Whisper transcription error:", err.message);
-    return "(transcription failed)";
-  }
-}
-
-// Basic route
+// Simple route
 app.get("/", (req, res) => {
   res.send("PodShot backend is running...");
 });
 
 /**
- * POST /process-screenshot
- *  1) Upload screenshot
- *  2) OCR => parse showName & timestamp
- *  3) iTunes search => feedUrl
- *  4) RSS feed => real audio link
- *  5) Download audio => extract 5s => transcribe
+ * POST /process-screenshot 
+ *   1) upload screenshot
+ *   2) analyze with Gemini => showName/timestamp
+ *   3) iTunes => feedUrl => parse => MP3
+ *   4) extract 5s snippet
  */
-app.post(
-  "/process-screenshot",
-  upload.single("screenshot"),
-  async (req, res) => {
-    debugger;
-    if (!req.file) {
-      return res.status(400).json({ error: "No screenshot uploaded" });
-    }
-    // const screenshotPath = req.file.path;
-    const screenshotPath = path.join(__dirname, 'screenshots', 'sss.png');
-
-    try {
-      tesseract
-        .recognize(screenshotPath, config)
-        .then((text) => {
-          console.log('OCR Result:', text);
-          res.send(text);
-        })
-        .catch((error) => {
-          console.error('OCR Error:', error.message);
-          res.status(500).send('Error processing the image.');
-        });
-    } catch (error) {
-      console.error('Error:', error.message);
-      res.status(500).send('An error occurred while processing the image.');
-    }
-
-    try {
-      const fullPath = path.resolve(screenshotPath);
-      const ocrText = await tesseract.recognize(fullPath)
-      .then(result => result.text);
-      
-      // Attempt naive parse for timestamp
-      let timestampSecs = parseTimestamp(ocrText);
-      let guessedTitle = ""; // We'll try to glean from OCR or GPT
-
-      // 2) If we can't find a clear timestamp or title, fallback to GPT
-      //    (This is simplified; you might always parse with GPT for the show name.)
-      if (!timestampSecs) {
-        const { title, timestamp } = await parseWithOpenAI(ocrText);
-        guessedTitle = title || "";
-        if (timestamp) {
-          timestampSecs = parseTimestamp(timestamp);
-        }
-      }
-      if (!timestampSecs) timestampSecs = 0;
-
-      // If we didn't get a show name from OCR, also fallback to GPT
-      if (!guessedTitle) {
-        const { title } = await parseWithOpenAI(ocrText);
-        guessedTitle = title || "";
-      }
-      if (!guessedTitle) {
-        throw new Error(
-          "Could not parse a valid podcast show name from screenshot text."
-        );
-      }
-
-      // 3) iTunes search => feedUrl
-      const feedUrl = await getFeedUrlFromiTunes(guessedTitle);
-      console.log(`iTunes found feedUrl: ${feedUrl}`);
-
-      // 4) Parse feed => get real audio link
-      const audioUrl = await getPodcastAudioFromFeed(feedUrl);
-      console.log(`Audio URL from feed: ${audioUrl}`);
-
-      // 5) Download the audio
-      const fullAudioPath = path.join(__dirname, "temp_full_audio.mp3");
-      const audioResp = await axios.get(audioUrl, {
-        responseType: "arraybuffer",
-      });
-      fs.writeFileSync(fullAudioPath, audioResp.data);
-
-      // Extract 5s snippet
-      const snippetPath = path.join(__dirname, `snippet_${Date.now()}.mp3`);
-      await extractAudioSnippet(timestampSecs, fullAudioPath, snippetPath);
-
-      // Transcribe snippet
-      const snippetTranscript = await transcribeAudio(snippetPath);
-
-      // Clean up
-      fs.unlinkSync(screenshotPath); // remove screenshot
-      fs.unlinkSync(fullAudioPath);
-      // fs.unlinkSync(snippetPath); // optionally remove snippet
-
-      return res.json({
-        success: true,
-        foundTimestamp: timestampSecs,
-        guessedTitle,
-        feedUrl,
-        snippetTranscript,
-      });
-    } catch (err) {
-      console.error("Error:", err.message);
-      console.log("Error:", err.message);
-      return res.status(500).json({ error: err.message });
-    }
+app.post("/process-screenshot", upload.single("screenshot"), async (req, res) => {
+  // TODO: delete
+  if (!fs.existsSync('uploads/')) {
+    fs.mkdirSync('uploads/');
   }
-);
+  
+  if (!req.file) {
+    return res.status(400).json({ error: "No screenshot uploaded." });
+  }
+  
+  console.log("Screenshot received:", req.file.path);
+  const screenshotPath = req.file.path;
+  
+  try {
+    // 1) LLM (Gemini) analysis
+    const { title, timestamp } = await parseWithGemini(screenshotPath);
+    const guessedTitle = title || "";
+    const timestampSecs = parseTimestamp(timestamp || "");
+
+    console.log("Parsed from screenshot:", { guessedTitle, timestamp, timestampSecs });
+    
+    if (!guessedTitle) {
+      throw new Error("No valid show name extracted from screenshot.");
+    }
+
+    // 2) iTunes => feedUrl => parse => MP3
+    console.log("Searching iTunes for:", guessedTitle);
+    const feedUrl = await getFeedUrlFromiTunes(guessedTitle);
+    console.log("Found feed URL:", feedUrl);
+    
+    const audioUrl = await getPodcastAudioFromFeed(feedUrl);
+    console.log("Found audio URL:", audioUrl);
+
+    /*
+    const fullAudioPath = path.join(__dirname, "temp_full_audio.mp3");
+    console.log("Downloading audio...");
+    const audioResp = await axios.get(audioUrl, { 
+      responseType: "arraybuffer",
+      timeout: 30000
+    });
+    fs.writeFileSync(fullAudioPath, audioResp.data);
+
+    const snippetPath = path.join(__dirname, `snippet_${Date.now()}.mp3`);
+    await extractAudioSnippet(timestampSecs, fullAudioPath, snippetPath);
+    
+    // cleanup
+    fs.unlinkSync(fullAudioPath);
+    */
+
+    // cleanup
+    fs.unlinkSync(screenshotPath);
+
+    return res.json({
+      success: true,
+      foundTimestamp: timestampSecs,
+      guessedTitle,
+      feedUrl,
+      audioUrl,
+      snippetInfo: "Audio processing skipped for demo"
+    });
+  } catch (err) {
+    console.error("Processing error:", err);
+    return res.status(500).json({ 
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Backend listening on http://localhost:${PORT}`);
+  console.log(`For external access, use: http://192.168.1.175:${PORT}`);
+  
+  if (!GEMINI_API_KEY) {
+    console.warn("⚠️ WARNING: GEMINI_API_KEY not set in environment variables!");
+    console.warn("Get a free API key from https://aistudio.google.com/");
+  }
 });
