@@ -1,27 +1,31 @@
-/**
- *   1) Accept an uploaded screenshot (multer)
- *   2) Use Google Gemini to parse show name + timestamp from the screenshot (multimodal)
- *   3) iTunes search => feedUrl
- *   4) Parse feed => real audio link
- *   5) Extract 5s around timestamp
- */
-
 import "dotenv/config";
 import express from "express";
 import multer from "multer";
 import fs from "fs";
 import axios from "axios";
-import ffmpeg from "fluent-ffmpeg";
 import Parser from "rss-parser";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import speech from '@google-cloud/speech';
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from '@ffmpeg-installer/ffmpeg';
+
+// Initialize Google Speech-to-Text client
+// const speechClient = new speech.SpeechClient();
+// const keyFilePath = path.join(__dirname, 'nimble-petal-453918-q5-8ef417a842d5.json');
+const speechClient = new speech.SpeechClient({
+  keyFilename: '*************************************.json'
+});
 
 // for ESM __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Multer config
+// ffmpeg path
+ffmpeg.setFfmpegPath(ffmpegPath.path);
+
+// multer config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/"),
   filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
@@ -30,6 +34,18 @@ const upload = multer({ storage });
 
 const app = express();
 const PORT = 4000;
+
+// public directory for audio files if it doesn't exist
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const AUDIO_DIR = path.join(PUBLIC_DIR, 'audio');
+if (!fs.existsSync(PUBLIC_DIR)) {
+  fs.mkdirSync(PUBLIC_DIR);
+}
+if (!fs.existsSync(AUDIO_DIR)) {
+  fs.mkdirSync(AUDIO_DIR);
+}
+
+app.use('/public', express.static(PUBLIC_DIR));
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY; 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
@@ -160,7 +176,7 @@ async function getPodcastAudioFromFeed(feedUrl) {
   }
 }
 
-/** demo: extract 5s around timestamp with FFmpeg */
+/** extract 5s around timestamp with FFmpeg */
 function extractAudioSnippet(timestampSecs, inputPath, outputPath) {
   return new Promise((resolve, reject) => {
     let start = timestampSecs - 2;
@@ -169,13 +185,67 @@ function extractAudioSnippet(timestampSecs, inputPath, outputPath) {
       .setStartTime(start)
       .setDuration(5)
       .output(outputPath)
+      .audioCodec('libmp3lame')
+      .audioChannels(1)  // mono for better speech recognition
+      .audioFrequency(16000)  // 16kHz for better speech recognition
       .on("end", () => resolve(outputPath))
       .on("error", (err) => reject(err))
       .run();
   });
 }
 
-// Simple route
+/** convert audio to text using Google Speech-to-Text */
+async function transcribeAudio(audioFilePath) {
+  try {
+    console.log("Starting audio transcription...");
+    
+    // read audio file
+    const audioBytes = fs.readFileSync(audioFilePath).toString('base64');
+    
+    const audio = {
+      content: audioBytes,
+    };
+    
+    // TODO: set languageCode based on the podcast language
+    const config = {
+      encoding: 'MP3',
+      sampleRateHertz: 16000,
+      languageCode: 'de-DE',
+      enableAutomaticPunctuation: true,
+    };
+    
+    const request = {
+      audio: audio,
+      config: config,
+    };
+    
+    const [response] = await speechClient.recognize(request);
+    const transcription = response.results
+      .map(result => result.alternatives[0].transcript)
+      .join('\n');
+    
+    console.log("Transcription result:", transcription);
+    return transcription;
+  } catch (err) {
+    console.error("Transcription error:", err.message);
+    return "Could not transcribe audio.";
+  }
+}
+
+// Format timestamp to HH:MM:SS
+function formatTimestamp(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  
+  return [
+    hours > 0 ? hours.toString().padStart(2, '0') : '',
+    minutes.toString().padStart(2, '0'),
+    remainingSeconds.toString().padStart(2, '0')
+  ].filter(Boolean).join(':');
+}
+
+// test route
 app.get("/", (req, res) => {
   res.send("PodShot backend is running...");
 });
@@ -186,9 +256,11 @@ app.get("/", (req, res) => {
  *   2) analyze with Gemini => showName/timestamp
  *   3) iTunes => feedUrl => parse => MP3
  *   4) extract 5s snippet
+ *   5) transcribe the snippet
  */
 app.post("/process-screenshot", upload.single("screenshot"), async (req, res) => {
-  // TODO: delete
+  // create uploads directory if it doesn't exist
+  // TODO: delete all
   if (!fs.existsSync('uploads/')) {
     fs.mkdirSync('uploads/');
   }
@@ -205,8 +277,9 @@ app.post("/process-screenshot", upload.single("screenshot"), async (req, res) =>
     const { title, timestamp } = await parseWithGemini(screenshotPath);
     const guessedTitle = title || "";
     const timestampSecs = parseTimestamp(timestamp || "");
+    const formattedTimestamp = formatTimestamp(timestampSecs);
 
-    console.log("Parsed from screenshot:", { guessedTitle, timestamp, timestampSecs });
+    console.log("Parsed from screenshot:", { guessedTitle, timestamp, timestampSecs, formattedTimestamp });
     
     if (!guessedTitle) {
       throw new Error("No valid show name extracted from screenshot.");
@@ -220,7 +293,7 @@ app.post("/process-screenshot", upload.single("screenshot"), async (req, res) =>
     const audioUrl = await getPodcastAudioFromFeed(feedUrl);
     console.log("Found audio URL:", audioUrl);
 
-    /*
+    // 3) download full audio
     const fullAudioPath = path.join(__dirname, "temp_full_audio.mp3");
     console.log("Downloading audio...");
     const audioResp = await axios.get(audioUrl, { 
@@ -229,23 +302,31 @@ app.post("/process-screenshot", upload.single("screenshot"), async (req, res) =>
     });
     fs.writeFileSync(fullAudioPath, audioResp.data);
 
-    const snippetPath = path.join(__dirname, `snippet_${Date.now()}.mp3`);
+    // 4) extract 5s around snippet
+    const snippetFilename = `snippet_${Date.now()}.mp3`;
+    const snippetPath = path.join(AUDIO_DIR, snippetFilename);
     await extractAudioSnippet(timestampSecs, fullAudioPath, snippetPath);
+    
+    // 5) Transcribe the audio snippet
+    const transcription = await transcribeAudio(snippetPath);
+    
+    // Generate a URL for the audio snippet
+    const snippetUrl = `${req.protocol}://${req.get('host')}/public/audio/${snippetFilename}`;
     
     // cleanup
     fs.unlinkSync(fullAudioPath);
-    */
-
-    // cleanup
     fs.unlinkSync(screenshotPath);
 
     return res.json({
       success: true,
-      foundTimestamp: timestampSecs,
       guessedTitle,
+      timestamp: formattedTimestamp,
       feedUrl,
       audioUrl,
-      snippetInfo: "Audio processing skipped for demo"
+      snippetUrl,
+      transcription,
+      snippetDuration: "5 seconds",
+      snippetInfo: `Audio extracted from ${guessedTitle} at ${formattedTimestamp}`
     });
   } catch (err) {
     console.error("Processing error:", err);
@@ -264,4 +345,9 @@ app.listen(PORT, () => {
     console.warn("⚠️ WARNING: GEMINI_API_KEY not set in environment variables!");
     console.warn("Get a free API key from https://aistudio.google.com/");
   }
+  
+  // if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  //   console.warn("⚠️ WARNING: GOOGLE_APPLICATION_CREDENTIALS not set in environment variables!");
+  //   console.warn("Speech-to-text functionality will not work properly.");
+  // }
 });

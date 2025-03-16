@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import "dotenv/config";
 import { View, Text, Button, Image, StyleSheet, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
-const API_URL = process.env.API_URL; 
+const API_URL = '*************'
 
 export default function App() {
   const [screenshotUri, setScreenshotUri] = useState(null);
@@ -26,34 +25,6 @@ export default function App() {
     }
   };
 
-  // const uploadScreenshot = async () => {
-  //   if (!screenshotUri) {
-  //     Alert.alert('No image selected', 'Pick a screenshot first.');
-  //     return;
-  //   }
-  //   try {
-  //     setResponseData({ status: 'uploading', message: 'Processing your screenshot...' });
-
-  //     const formData = new FormData();
-  //     formData.append('screenshot', {
-  //       uri: screenshotUri,
-  //       type: 'image/png',
-  //       name: 'screenshot.png'
-  //     });
-
-  //     const res = await fetch(`${API_URL}/process-screenshot`, {
-  //       method: 'POST',
-  //       body: formData,
-  //       headers: {
-  //         'Content-Type': 'multipart/form-data'
-  //       }
-  //     });
-  //     const data = await res.json();
-  //     setResponseData(data);
-  //   } catch (err) {
-  //     Alert.alert('Upload error', err.message);
-  //   }
-  // };
   const uploadScreenshot = async () => {
     if (!screenshotUri) {
       Alert.alert('No image selected', 'Pick a screenshot first.');
