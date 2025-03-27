@@ -102,13 +102,13 @@ async function parseWithGemini(imagePath) {
     };
 
     const prompt = `
-      This is a screenshot from a podcast player. Extract exactly two pieces of information:
-      1. The episode (the name of the specific podast episode). 
-      2. The podcast (the name of podcast show).
+      This is a screenshot from a podcast player.  Identify these three fields in the screenshot::
+      1. The episode (the specific episode name or(and) number (like '#2286 - Antonio Brown').Do not return letters-text that have been cut off(like 'b - Komentari su me pogadj' -> 'Komentari su me')). 
+      2. The podcast (the overall podcast name (like 'The Joe Rogan Experience')).
       3. The current timestamp shown in the player (in format HH:MM:SS or MM:SS).
       
       Return ONLY a JSON object with these two fields:
-      {"epsiode": "episode title here. If the text is cut off, logically conclude how the text continues based on the part of the text that is shown.", "podcast": "podcast title here", "timestamp": "00:00:00"}
+      {"epsiode": "episode title here", "podcast": "podcast title here", "timestamp": "00:00:00"}
       
       If you can't find one of these values, use an empty string for that field.
     `;
@@ -152,7 +152,6 @@ async function parseWithGemini(imagePath) {
 /** iTunes search  */
 async function getFeedUrlFromiTunes(showName, episodeName = "") {
   if (!showName) throw new Error("No show name for iTunes search.");
-
   // Combine podcast and episode name in the search term
   const searchTerm = episodeName ? `${showName} ${episodeName}` : showName;
 
@@ -361,6 +360,7 @@ app.post(
       fs.unlinkSync(fullAudioPath);
       fs.unlinkSync(screenshotPath);
 
+      debugger;
       return res.json({
         success: true,
         guessedTitle,
