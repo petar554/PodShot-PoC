@@ -82,7 +82,6 @@ function parseTimestamp(text) {
 }
 
 async function parseWithGemini(imagePath) {
-  debugger;
   try {
     console.log("Starting Gemini analysis...");
 
@@ -103,15 +102,15 @@ async function parseWithGemini(imagePath) {
     };
 
     const prompt = `
-    This is a screenshot from a podcast player. Extract exactly two pieces of information:
-    1. The episode (the name of the specific podast episode). 
-    2. The podcast (the name of podcast show).
-    3. The current timestamp shown in the player (in format HH:MM:SS or MM:SS).
-    
-    Return ONLY a JSON object with these two fields:
-    {"epsiode": "episode title here. If the text is cut off, logically conclude how the text continues based on the part of the text that is shown.", "podcast": "podcast title here", "timestamp": "00:00:00"}
-    
-    If you can't find one of these values, use an empty string for that field.
+      This is a screenshot from a podcast player. Extract exactly two pieces of information:
+      1. The episode (the name of the specific podast episode). 
+      2. The podcast (the name of podcast show).
+      3. The current timestamp shown in the player (in format HH:MM:SS or MM:SS).
+      
+      Return ONLY a JSON object with these two fields:
+      {"epsiode": "episode title here. If the text is cut off, logically conclude how the text continues based on the part of the text that is shown.", "podcast": "podcast title here", "timestamp": "00:00:00"}
+      
+      If you can't find one of these values, use an empty string for that field.
     `;
 
     const result = await model.generateContent([prompt, imagePart]);
@@ -193,7 +192,13 @@ async function getPodcastAudioFromFeed(feedUrl) {
     if (!firstItem.enclosure?.url) {
       throw new Error("No enclosure URL in the feed item.");
     }
-    return firstItem.enclosure.url;
+
+    const feedLanguage = feed.language || "en-US";
+    return { 
+      audioUrl: firstItem.enclosure.url, 
+      language: feedLanguage 
+    };
+
   } catch (err) {
     console.error("Feed parsing error:", err.message);
     throw new Error(`Failed to parse feed: ${err.message}`);
@@ -219,7 +224,7 @@ function extractAudioSnippet(timestampSecs, inputPath, outputPath) {
 }
 
 /** convert audio to text using Google Speech-to-Text */
-async function transcribeAudio(audioFilePath) {
+async function transcribeAudio(audioFilePath, languageCode = "en-US") {
   try {
     console.log("Starting audio transcription...");
 
@@ -234,7 +239,7 @@ async function transcribeAudio(audioFilePath) {
     const config = {
       encoding: "MP3",
       sampleRateHertz: 16000,
-      languageCode: "sr-RS",
+      languageCode,
       enableAutomaticPunctuation: true,
     };
 
@@ -327,8 +332,8 @@ app.post(
       const feedUrl = await getFeedUrlFromiTunes(podcast, episode);
       console.log("Found feed URL:", feedUrl);
 
-      const audioUrl = await getPodcastAudioFromFeed(feedUrl);
-      console.log("Found audio URL:", audioUrl);
+      const { audioUrl, language } = await getPodcastAudioFromFeed(feedUrl);
+      console.log("Found audio URL:", audioUrl, "with language:", language);
 
       // 3) download full audio
       const fullAudioPath = path.join(__dirname, "temp_full_audio.mp3");
@@ -345,7 +350,7 @@ app.post(
       await extractAudioSnippet(timestampSecs, fullAudioPath, snippetPath);
 
       // 5) Transcribe the audio snippet
-      const transcription = await transcribeAudio(snippetPath);
+      const transcription = await transcribeAudio(snippetPath, language);
 
       // Generate a URL for the audio snippet
       const snippetUrl = `${req.protocol}://${req.get(
