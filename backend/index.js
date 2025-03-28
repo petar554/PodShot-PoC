@@ -10,6 +10,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import speech from "@google-cloud/speech";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
+import tesseract from "tesseract.js";
 
 // Initialize Google Speech-to-Text client
 // const speechClient = new speech.SpeechClient();
@@ -63,6 +64,22 @@ app.use((req, res, next) => {
 
 const rssParser = new Parser();
 
+async function getOcrText(imagePath) {
+  try {
+    const config = {
+      lang: "eng",
+      oem: 1,
+      psm: 3,
+    };
+    const text = await tesseract.recognize(imagePath, config);
+    console.log("OCR OUTPUT FROM SCREENSHOT:", text);
+    return text;
+  } catch (err) {
+    console.error("OCR error:", err);
+    return "";
+  }
+};
+
 /** parse a HH:MM:SS or HH:MM timestamp from text. */
 function parseTimestamp(text) {
   const match = text.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -104,7 +121,7 @@ async function parseWithGemini(imagePath) {
     const prompt = `
       This is a screenshot from a podcast player.  Identify these three fields in the screenshot::
       1. The episode (the specific episode name or(and) number (like '#2286 - Antonio Brown').Do not return letters-text that have been cut off(like 'b - Komentari su me pogadj' -> 'Komentari su me')). 
-      2. The podcast (the overall podcast name (like 'The Joe Rogan Experience')).
+      2. The podcast (the overall podcast name (like 'The Joe Rogan Experience'). The podcast name is usually bold and is the largest heading on the screenshot. The podcast name is written as the text on the screenshot, not as the text on the image on the screenshot).
       3. The current timestamp shown in the player (in format HH:MM:SS or MM:SS).
       
       Return ONLY a JSON object with these two fields:
@@ -193,11 +210,10 @@ async function getPodcastAudioFromFeed(feedUrl) {
     }
 
     const feedLanguage = feed.language || "en-US";
-    return { 
-      audioUrl: firstItem.enclosure.url, 
-      language: feedLanguage 
+    return {
+      audioUrl: firstItem.enclosure.url,
+      language: feedLanguage,
     };
-
   } catch (err) {
     console.error("Feed parsing error:", err.message);
     throw new Error(`Failed to parse feed: ${err.message}`);
@@ -304,6 +320,8 @@ app.post(
 
     console.log("Screenshot received:", req.file.path);
     const screenshotPath = req.file.path;
+
+    await getOcrText(screenshotPath);
 
     try {
       // 1) LLM (Gemini) analysis
