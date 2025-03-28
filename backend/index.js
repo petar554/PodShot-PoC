@@ -10,7 +10,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import speech from "@google-cloud/speech";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
-import tesseract from "tesseract.js";
+import tesseract from "node-tesseract-ocr";
 
 // Initialize Google Speech-to-Text client
 // const speechClient = new speech.SpeechClient();
@@ -66,19 +66,25 @@ const rssParser = new Parser();
 
 async function getOcrText(imagePath) {
   try {
+    console.log("Starting OCR with node-tesseract-ocr...");
+    
     const config = {
-      lang: "eng",
+      lang: 'eng',
       oem: 1,
-      psm: 3,
+      psm: 6,
+      // improve recognition for screen text
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:.-_ '
     };
+    
     const text = await tesseract.recognize(imagePath, config);
-    console.log("OCR OUTPUT FROM SCREENSHOT:", text);
-    return text;
+    console.log("OCR Text Result:", text);
+    
+    return text.trim();
   } catch (err) {
-    console.error("OCR error:", err);
-    return "";
+    console.error("OCR Error:", err);
+    throw err;
   }
-};
+}
 
 /** parse a HH:MM:SS or HH:MM timestamp from text. */
 function parseTimestamp(text) {
@@ -321,7 +327,8 @@ app.post(
     console.log("Screenshot received:", req.file.path);
     const screenshotPath = req.file.path;
 
-    await getOcrText(screenshotPath);
+    const ocrText = await getOcrText(screenshotPath);
+    console.log("OCR result:", ocrText);
 
     try {
       // 1) LLM (Gemini) analysis
