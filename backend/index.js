@@ -67,18 +67,19 @@ const rssParser = new Parser();
 async function getOcrText(imagePath) {
   try {
     console.log("Starting OCR with node-tesseract-ocr...");
-    
+
     const config = {
-      lang: 'eng',
+      lang: "eng",
       oem: 1,
       psm: 6,
       // improve recognition for screen text
-      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:.-_ '
+      tessedit_char_whitelist:
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:.-_ ",
     };
-    
+
     const text = await tesseract.recognize(imagePath, config);
     console.log("OCR Text Result:", text);
-    
+
     return text.trim();
   } catch (err) {
     console.error("OCR Error:", err);
@@ -302,6 +303,24 @@ app.get("/", (req, res) => {
   res.send("PodShot backend is running...");
 });
 
+async function detectPlaybackBar(imagePath) {
+  console.log("Detecting bounding box for playback bar in:", imagePath);
+
+  // TODO: Replace this stub with a real detection model (e.g., YOLO, Detectron2).
+  // this placeholder returns a fixed bounding box as an example.
+  // in a real scenario, you might return multiple boxes or confidence scores.
+
+  const mockBoundingBox = {
+    x: 100,
+    y: 300,
+    width: 200,
+    height: 60,
+  };
+
+  //simulate async detection
+  return mockBoundingBox;
+};
+
 /**
  * POST /process-screenshot
  *   1) upload screenshot
@@ -326,6 +345,9 @@ app.post(
 
     console.log("Screenshot received:", req.file.path);
     const screenshotPath = req.file.path;
+
+    const playbackBarBox = await detectPlaybackBar(screenshotPath);
+    console.log("Playback bar bounding box:", playbackBarBox);
 
     const ocrText = await getOcrText(screenshotPath);
     console.log("OCR result:", ocrText);
@@ -385,7 +407,6 @@ app.post(
       fs.unlinkSync(fullAudioPath);
       fs.unlinkSync(screenshotPath);
 
-      debugger;
       return res.json({
         success: true,
         guessedTitle,
