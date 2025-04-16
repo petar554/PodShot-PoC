@@ -64,6 +64,62 @@ app.use((req, res, next) => {
 
 const rssParser = new Parser();
 
+// Define template regions for different podcast UIs
+const PODCAST_TEMPLATES = [
+  {
+    name: "spotify",
+    regions: {
+      podcast: { top: 0.65, left: 0.05, width: 0.9, height: 0.1 },
+      episode: { top: 0.55, left: 0.05, width: 0.9, height: 0.1 },
+      timestamp: { top: 0.75, left: 0.05, width: 0.15, height: 0.1 }
+    },
+    features: {
+      darkBackground: true,
+      playerControls: "bottom",
+      logoPosition: "top-left"
+    }
+  },
+  {
+    name: "apple_podcasts",
+    regions: {
+      podcast: { top: 0.8, left: 0.3, width: 0.65, height: 0.1 },
+      episode: { top: 0.72, left: 0.3, width: 0.6, height: 0.08 },
+      timestamp: { top: 0.9, left: 0.05, width: 0.15, height: 0.05 }
+    },
+    features: {
+      darkBackground: false,
+      playerControls: "bottom",
+      logoPosition: "left-middle"
+    }
+  },
+  {
+    name: "joe_rogan",
+    regions: {
+      podcast: { top: 0.65, left: 0.05, width: 0.9, height: 0.1 },
+      episode: { top: 0.55, left: 0.05, width: 0.9, height: 0.1 },
+      timestamp: { top: 0.85, left: 0.05, width: 0.15, height: 0.05 }
+    },
+    features: {
+      darkBackground: true,
+      playerControls: "bottom",
+      logoPosition: "top"
+    }
+  },
+  {
+    name: "youtube_podcast",
+    regions: {
+      podcast: { top: 0.85, left: 0.1, width: 0.8, height: 0.1 },
+      episode: { top: 0.75, left: 0.1, width: 0.8, height: 0.1 },
+      timestamp: { top: 0.9, left: 0.1, width: 0.2, height: 0.05 }
+    },
+    features: {
+      darkBackground: true,
+      playerControls: "bottom",
+      logoPosition: "top-left"
+    }
+  }
+];
+
 async function getOcrText(imagePath) {
   try {
     console.log("Starting OCR with node-tesseract-ocr...");
