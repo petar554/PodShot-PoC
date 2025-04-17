@@ -11,6 +11,8 @@ import speech from "@google-cloud/speech";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import tesseract from "node-tesseract-ocr";
+import sharp from "sharp";
+import { createCanvas, loadImage } from "canvas";
 
 // Initialize Google Speech-to-Text client
 // const speechClient = new speech.SpeechClient();
@@ -40,11 +42,19 @@ const PORT = 4000;
 // public directory for audio files if it doesn't exist
 const PUBLIC_DIR = path.join(__dirname, "public");
 const AUDIO_DIR = path.join(PUBLIC_DIR, "audio");
+const TEMPLATES_DIR = path.join(__dirname, "templates");
+
 if (!fs.existsSync(PUBLIC_DIR)) {
   fs.mkdirSync(PUBLIC_DIR);
 }
 if (!fs.existsSync(AUDIO_DIR)) {
   fs.mkdirSync(AUDIO_DIR);
+}
+if (!fs.existsSync(TEMPLATES_DIR)) {
+  fs.mkdirSync(TEMPLATES_DIR);
+}
+if (!fs.existsSync("uploads/")) {
+  fs.mkdirSync("uploads/");
 }
 
 app.use("/public", express.static(PUBLIC_DIR));
@@ -64,7 +74,7 @@ app.use((req, res, next) => {
 
 const rssParser = new Parser();
 
-// Define template regions for different podcast UIs
+// define template regions for different podcast UIs
 const PODCAST_TEMPLATES = [
   {
     name: "spotify",
@@ -119,6 +129,200 @@ const PODCAST_TEMPLATES = [
     }
   }
 ];
+
+// extract features from an image for template matching
+async function extractImageFeatures(imagePath) {
+  try {
+    // Get image dimensions and metadata
+    const metadata = await sharp(imagePath).metadata();
+    const { width, height } = metadata;
+    
+    // Calculate average brightness (simple feature)
+    const { dominant } = await sharp(imagePath)
+      .resize(50, 50) // Resize for faster processing
+      .stats();
+    
+    const avgBrightness = (dominant.r + dominant.g + dominant.b) / 3;
+    const isDarkBackground = avgBrightness < 128;
+
+    // Check for player controls at bottom (simple heuristic)
+    const bottomRegion = await sharp(imagePath)
+      .extract({ left: 0, top: Math.floor(height * 0.8), width, height: Math.floor(height * 0.2) })
+      .toBuffer();
+    
+    const bottomStats = await sharp(bottomRegion).stats();
+    const hasBottomControls = bottomStats.channels[0].mean < 200; // Approximate check for UI elements
+    
+    // Extract features from different regions of the image
+    // For simplicity, we'll just sample some key areas
+    const topLeftFeature = await sharp(imagePath)
+      .extract({ left: 0, top: 0, width: Math.floor(width * 0.2), height: Math.floor(height * 0.2) })
+      .toBuffer();
+    
+    const middleFeature = await sharp(imagePath)
+      .extract({ 
+        left: Math.floor(width * 0.4), 
+        top: Math.floor(height * 0.4), 
+        width: Math.floor(width * 0.2), 
+        height: Math.floor(height * 0.2) 
+      })
+      .toBuffer();
+    
+    return {
+      width,
+      height,
+      isDarkBackground,
+      hasBottomControls,
+      topLeftFeatureHash: await imageHashSimple(topLeftFeature),
+      middleFeatureHash: await imageHashSimple(middleFeature),
+    };
+  } catch (err) {
+    console.error("Error extracting image features:", err);
+    return null;
+  }
+}
+
+// simple perceptual hash function for image similarity
+async function imageHashSimple(imageBuffer) {
+  try {
+    // resize image to 8x8 grayscale for simple hash
+    const resizedBuffer = await sharp(imageBuffer)
+      .resize(8, 8)
+      .grayscale()
+      .raw()
+      .toBuffer();
+    
+    // calculate average pixel value
+    const pixels = new Uint8Array(resizedBuffer);
+    const average = pixels.reduce((sum, pixel) => sum + pixel, 0) / pixels.length;
+    
+    // create hash (1 for pixels above average, 0 for below)
+    let hash = "";
+    for (const pixel of pixels) {
+      hash += pixel >= average ? "1" : "0";
+    }
+    
+    return hash;
+  } catch (err) {
+    console.error("Error calculating image hash:", err);
+    return "";
+  }
+}
+
+// function to find the best matching template
+async function findBestTemplate(imageFeatures) {
+  if (!imageFeatures) return PODCAST_TEMPLATES[0]; // default to first template if features extraction failed
+  
+  let bestMatch = null;
+  let bestScore = -Infinity;
+  
+  for (const template of PODCAST_TEMPLATES) {
+    let score = 0;
+    
+    // score based on dark/light background
+    if (template.features.darkBackground === imageFeatures.isDarkBackground) {
+      score += 10;
+    }
+    
+    // score based on player controls position
+    if (template.features.playerControls === "bottom" && imageFeatures.hasBottomControls) {
+      score += 10;
+    }
+    
+    // for logo position and other more complex features, we would need more sophisticated
+    // image analysis, but this gives a basic template matching approach
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = template;
+    }
+  }
+  
+  console.log(`Best template match: ${bestMatch.name} with score ${bestScore}`);
+  return bestMatch || PODCAST_TEMPLATES[0];
+}
+
+// extract regions from image based on template
+async function extractRegionsFromTemplate(imagePath, template) {
+  try {
+    const metadata = await sharp(imagePath).metadata();
+    const { width, height } = metadata;
+    
+    // extract each region based on template
+    const regions = {};
+    
+    for (const [regionName, regionDims] of Object.entries(template.regions)) {
+      // calculate absolute pixel values from relative positions
+      const left = Math.floor(regionDims.left * width);
+      const top = Math.floor(regionDims.top * height);
+      const regionWidth = Math.floor(regionDims.width * width);
+      const regionHeight = Math.floor(regionDims.height * height);
+      
+      // skip if dimensions are invalid
+      if (regionWidth <= 0 || regionHeight <= 0) {
+        console.warn(`Invalid dimensions for ${regionName} region`);
+        continue;
+      }
+      
+      // extract the region
+      const regionPath = path.join(
+        "uploads", 
+        `${path.basename(imagePath, path.extname(imagePath))}_${regionName}${path.extname(imagePath)}`
+      );
+      
+      await sharp(imagePath)
+        .extract({ left, top, width: regionWidth, height: regionHeight })
+        .toFile(regionPath);
+      
+      regions[regionName] = regionPath;
+    }
+    
+    return regions;
+  } catch (err) {
+    console.error("Error extracting regions:", err);
+    return {};
+  }
+}
+
+// process specific regions with OCR
+async function processRegionsWithOCR(regions) {
+  const results = {};
+  
+  for (const [regionName, regionPath] of Object.entries(regions)) {
+    if (!fs.existsSync(regionPath)) {
+      console.warn(`Region file does not exist: ${regionPath}`);
+      continue;
+    }
+    
+    try {
+      // OCR options based on region type
+      let config = {
+        lang: "eng",
+        oem: 1,
+        psm: 6,
+      };
+      
+      // OCR settings based on region type
+      if (regionName === "timestamp") {
+        config.psm = 7; // Treat as single line of text
+        config.tessedit_char_whitelist = "0123456789:-.";
+      } else if (regionName === "podcast" || regionName === "episode") {
+        config.psm = 6; // Assume it's a block of uniform text
+      }
+      
+      // perform OCR on the region
+      const text = await tesseract.recognize(regionPath, config);
+      results[regionName] = text.trim();
+      
+      fs.unlinkSync(regionPath);
+    } catch (err) {
+      console.error(`Error processing region ${regionName}:`, err);
+      results[regionName] = "";
+    }
+  }
+  
+  return results;
+}
 
 async function getOcrText(imagePath) {
   try {
@@ -362,19 +566,42 @@ app.get("/", (req, res) => {
 async function detectPlaybackBar(imagePath) {
   console.log("Detecting bounding box for playback bar in:", imagePath);
 
-  // TODO: Replace this stub with a real detection model (e.g., YOLO, Detectron2).
-  // this placeholder returns a fixed bounding box as an example.
-  // in a real scenario, you might return multiple boxes or confidence scores.
-
-  const mockBoundingBox = {
-    x: 100,
-    y: 300,
-    width: 200,
-    height: 60,
-  };
-
-  //simulate async detection
-  return mockBoundingBox;
+  try {
+    // extract features from image
+    const imageFeatures = await extractImageFeatures(imagePath);
+    
+    // find best matching template
+    const bestTemplate = await findBestTemplate(imageFeatures);
+    
+    // extract regions of interest from image based on template
+    const regions = await extractRegionsFromTemplate(imagePath, bestTemplate);
+    
+    // use dimensions for playback bar based on best template
+    const metadata = await sharp(imagePath).metadata();
+    const { width, height } = metadata;
+    
+    // default playback bar location is at the bottom 20% of the screen
+    return {
+      x: 0,
+      y: Math.floor(height * 0.8),
+      width: width,
+      height: Math.floor(height * 0.2),
+      template: bestTemplate.name,
+      regions: regions
+    };
+  } catch (err) {
+    console.error("Error in playback bar detection:", err);
+    
+    // fallback to default if detection fails
+    return {
+      x: 100,
+      y: 300,
+      width: 200,
+      height: 60,
+      template: "default",
+      regions: {}
+    };
+  }
 };
 
 /**
@@ -402,17 +629,36 @@ app.post(
     console.log("Screenshot received:", req.file.path);
     const screenshotPath = req.file.path;
 
-    const playbackBarBox = await detectPlaybackBar(screenshotPath);
-    console.log("Playback bar bounding box:", playbackBarBox);
-
-    const ocrText = await getOcrText(screenshotPath);
-    console.log("OCR result:", ocrText);
-
     try {
-      // 1) LLM (Gemini) analysis
-      const { podcast, episode, timestamp } = await parseWithGemini(
-        screenshotPath
-      );
+      // detect UI elements and extract regions
+      debugger;
+      const playbackInfo = await detectPlaybackBar(screenshotPath);
+      console.log("Playback bar info:", playbackInfo);
+      
+      // process extracted regions with OCR if available
+      let templateData = {};
+      if (playbackInfo.regions && Object.keys(playbackInfo.regions).length > 0) {
+        templateData = await processRegionsWithOCR(playbackInfo.regions);
+        console.log("Template-based OCR results:", templateData);
+      }
+
+      // fallback to full image OCR if template extraction failed
+      const ocrText = await getOcrText(screenshotPath);
+      console.log("Full OCR result:", ocrText);
+
+      // 1) use template data if available, otherwise fall back to Gemini
+      let podcast = templateData.podcast || "";
+      let episode = templateData.episode || "";
+      let timestamp = templateData.timestamp || "";
+      
+      // if template extraction failed, use Gemini as backup
+      if (!podcast || !episode || !timestamp) {
+        const geminiResults = await parseWithGemini(screenshotPath);
+        podcast = podcast || geminiResults.podcast || "";
+        episode = episode || geminiResults.episode || "";
+        timestamp = timestamp || geminiResults.timestamp || "";
+      }
+
       const guessedTitle = podcast || "";
       const timestampSecs = parseTimestamp(timestamp || "");
       const formattedTimestamp = formatTimestamp(timestampSecs);
@@ -473,6 +719,7 @@ app.post(
         transcription,
         snippetDuration: "5 seconds",
         snippetInfo: `Audio extracted from ${guessedTitle} at ${formattedTimestamp}`,
+        detectionMethod: playbackInfo.template,
       });
     } catch (err) {
       console.error("Processing error:", err);
