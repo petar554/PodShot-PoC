@@ -12,6 +12,7 @@ import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import tesseract from "node-tesseract-ocr";
 import sharp from "sharp";
+import { getDB } from './db.js';
 import { createCanvas, loadImage } from "canvas";
 
 // Initialize Google Speech-to-Text client
@@ -734,6 +735,13 @@ app.post(
 app.listen(PORT, () => {
   console.log(`Backend listening on http://localhost:${PORT}`);
   console.log(`For external access, use: http://192.168.1.175:${PORT}`);
+
+   // initialize database
+   getDB().then(() => {
+    console.log("Database connection established");
+  }).catch(err => {
+    console.error("Database initialization error:", err);
+  });
 
   if (!GEMINI_API_KEY) {
     console.warn(
