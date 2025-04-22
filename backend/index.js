@@ -5,15 +5,19 @@ import fs from "fs";
 import axios from "axios";
 import Parser from "rss-parser";
 import path from "path";
-import { fileURLToPath } from "url";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import speech from "@google-cloud/speech";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import tesseract from "node-tesseract-ocr";
 import sharp from "sharp";
-import { getDB } from './db.js';
+
+import { fileURLToPath } from "url";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createCanvas, loadImage } from "canvas";
+import { processTemplate } from './templateModel.js';
+import { extractRegion } from './utils/imageUtils';
+import { getDB } from './db.js';
+import { listTemplates, getTemplateDetails, backupDatabase } from './dbTools.js';
 
 // Initialize Google Speech-to-Text client
 // const speechClient = new speech.SpeechClient();
@@ -75,114 +79,6 @@ app.use((req, res, next) => {
 
 const rssParser = new Parser();
 
-// define template regions for different podcast UIs
-const PODCAST_TEMPLATES = [
-  {
-    name: "spotify",
-    regions: {
-      podcast: { top: 0.65, left: 0.05, width: 0.9, height: 0.1 },
-      episode: { top: 0.55, left: 0.05, width: 0.9, height: 0.1 },
-      timestamp: { top: 0.75, left: 0.05, width: 0.15, height: 0.1 }
-    },
-    features: {
-      darkBackground: true,
-      playerControls: "bottom",
-      logoPosition: "top-left"
-    }
-  },
-  {
-    name: "apple_podcasts",
-    regions: {
-      podcast: { top: 0.8, left: 0.3, width: 0.65, height: 0.1 },
-      episode: { top: 0.72, left: 0.3, width: 0.6, height: 0.08 },
-      timestamp: { top: 0.9, left: 0.05, width: 0.15, height: 0.05 }
-    },
-    features: {
-      darkBackground: false,
-      playerControls: "bottom",
-      logoPosition: "left-middle"
-    }
-  },
-  {
-    name: "joe_rogan",
-    regions: {
-      podcast: { top: 0.65, left: 0.05, width: 0.9, height: 0.1 },
-      episode: { top: 0.55, left: 0.05, width: 0.9, height: 0.1 },
-      timestamp: { top: 0.85, left: 0.05, width: 0.15, height: 0.05 }
-    },
-    features: {
-      darkBackground: true,
-      playerControls: "bottom",
-      logoPosition: "top"
-    }
-  },
-  {
-    name: "youtube_podcast",
-    regions: {
-      podcast: { top: 0.85, left: 0.1, width: 0.8, height: 0.1 },
-      episode: { top: 0.75, left: 0.1, width: 0.8, height: 0.1 },
-      timestamp: { top: 0.9, left: 0.1, width: 0.2, height: 0.05 }
-    },
-    features: {
-      darkBackground: true,
-      playerControls: "bottom",
-      logoPosition: "top-left"
-    }
-  }
-];
-
-// extract features from an image for template matching
-async function extractImageFeatures(imagePath) {
-  try {
-    // Get image dimensions and metadata
-    const metadata = await sharp(imagePath).metadata();
-    const { width, height } = metadata;
-    
-    // Calculate average brightness (simple feature)
-    const { dominant } = await sharp(imagePath)
-      .resize(50, 50) // Resize for faster processing
-      .stats();
-    
-    const avgBrightness = (dominant.r + dominant.g + dominant.b) / 3;
-    const isDarkBackground = avgBrightness < 128;
-
-    // Check for player controls at bottom (simple heuristic)
-    const bottomRegion = await sharp(imagePath)
-      .extract({ left: 0, top: Math.floor(height * 0.8), width, height: Math.floor(height * 0.2) })
-      .toBuffer();
-    
-    const bottomStats = await sharp(bottomRegion).stats();
-    const hasBottomControls = bottomStats.channels[0].mean < 200; // Approximate check for UI elements
-    
-    // Extract features from different regions of the image
-    // For simplicity, we'll just sample some key areas
-    const topLeftFeature = await sharp(imagePath)
-      .extract({ left: 0, top: 0, width: Math.floor(width * 0.2), height: Math.floor(height * 0.2) })
-      .toBuffer();
-    
-    const middleFeature = await sharp(imagePath)
-      .extract({ 
-        left: Math.floor(width * 0.4), 
-        top: Math.floor(height * 0.4), 
-        width: Math.floor(width * 0.2), 
-        height: Math.floor(height * 0.2) 
-      })
-      .toBuffer();
-    
-    return {
-      width,
-      height,
-      isDarkBackground,
-      hasBottomControls,
-      topLeftFeatureHash: await imageHashSimple(topLeftFeature),
-      middleFeatureHash: await imageHashSimple(middleFeature),
-    };
-  } catch (err) {
-    console.error("Error extracting image features:", err);
-    return null;
-  }
-}
-
 // simple perceptual hash function for image similarity
 async function imageHashSimple(imageBuffer) {
   try {
@@ -207,81 +103,6 @@ async function imageHashSimple(imageBuffer) {
   } catch (err) {
     console.error("Error calculating image hash:", err);
     return "";
-  }
-}
-
-// function to find the best matching template
-async function findBestTemplate(imageFeatures) {
-  if (!imageFeatures) return PODCAST_TEMPLATES[0]; // default to first template if features extraction failed
-  
-  let bestMatch = null;
-  let bestScore = -Infinity;
-  
-  for (const template of PODCAST_TEMPLATES) {
-    let score = 0;
-    
-    // score based on dark/light background
-    if (template.features.darkBackground === imageFeatures.isDarkBackground) {
-      score += 10;
-    }
-    
-    // score based on player controls position
-    if (template.features.playerControls === "bottom" && imageFeatures.hasBottomControls) {
-      score += 10;
-    }
-    
-    // for logo position and other more complex features, we would need more sophisticated
-    // image analysis, but this gives a basic template matching approach
-    
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = template;
-    }
-  }
-  
-  console.log(`Best template match: ${bestMatch.name} with score ${bestScore}`);
-  return bestMatch || PODCAST_TEMPLATES[0];
-}
-
-// extract regions from image based on template
-async function extractRegionsFromTemplate(imagePath, template) {
-  try {
-    const metadata = await sharp(imagePath).metadata();
-    const { width, height } = metadata;
-    
-    // extract each region based on template
-    const regions = {};
-    
-    for (const [regionName, regionDims] of Object.entries(template.regions)) {
-      // calculate absolute pixel values from relative positions
-      const left = Math.floor(regionDims.left * width);
-      const top = Math.floor(regionDims.top * height);
-      const regionWidth = Math.floor(regionDims.width * width);
-      const regionHeight = Math.floor(regionDims.height * height);
-      
-      // skip if dimensions are invalid
-      if (regionWidth <= 0 || regionHeight <= 0) {
-        console.warn(`Invalid dimensions for ${regionName} region`);
-        continue;
-      }
-      
-      // extract the region
-      const regionPath = path.join(
-        "uploads", 
-        `${path.basename(imagePath, path.extname(imagePath))}_${regionName}${path.extname(imagePath)}`
-      );
-      
-      await sharp(imagePath)
-        .extract({ left, top, width: regionWidth, height: regionHeight })
-        .toFile(regionPath);
-      
-      regions[regionName] = regionPath;
-    }
-    
-    return regions;
-  } catch (err) {
-    console.error("Error extracting regions:", err);
-    return {};
   }
 }
 
@@ -568,26 +389,35 @@ async function detectPlaybackBar(imagePath) {
   console.log("Detecting bounding box for playback bar in:", imagePath);
 
   try {
-    // extract features from image
-    const imageFeatures = await extractImageFeatures(imagePath);
+    // process the image with our template model
+    const template = await processTemplate(imagePath);
     
-    // find best matching template
-    const bestTemplate = await findBestTemplate(imageFeatures);
+    //extract regions based on template
+    const regions = {};
+    const templateRegions = template.regions || {};
     
-    // extract regions of interest from image based on template
-    const regions = await extractRegionsFromTemplate(imagePath, bestTemplate);
+    for (const [regionName, regionConfig] of Object.entries(templateRegions)) {
+      const regionPath = path.join(
+        "uploads", 
+        `${path.basename(imagePath, path.extname(imagePath))}_${regionName}${path.extname(imagePath)}`
+      );
+      
+      const extractedRegion = await extractRegion(imagePath, regionConfig, regionPath);
+      if (extractedRegion) {
+        regions[regionName] = regionPath;
+      }
+    }
     
-    // use dimensions for playback bar based on best template
+    // get image dimensions
     const metadata = await sharp(imagePath).metadata();
     const { width, height } = metadata;
     
-    // default playback bar location is at the bottom 20% of the screen
     return {
       x: 0,
       y: Math.floor(height * 0.8),
       width: width,
       height: Math.floor(height * 0.2),
-      template: bestTemplate.name,
+      template: template.name || 'default',
       regions: regions
     };
   } catch (err) {
@@ -603,7 +433,7 @@ async function detectPlaybackBar(imagePath) {
       regions: {}
     };
   }
-};
+}
 
 /**
  * POST /process-screenshot
@@ -731,6 +561,45 @@ app.post(
     }
   }
 );
+
+// list all templates
+app.get('/templates', async (req, res) => {
+  try {
+    const templates = await listTemplates();
+    res.json({ success: true, templates });
+  } catch (err) {
+    console.error('Error listing templates:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// get template details
+app.get('/templates/:id', async (req, res) => {
+  try {
+    const templateId = parseInt(req.params.id);
+    const template = await getTemplateDetails(templateId);
+    
+    if (!template) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+    
+    res.json({ success: true, template });
+  } catch (err) {
+    console.error('Error getting template details:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// database backup
+app.post('/backup-database', async (req, res) => {
+  try {
+    const backupPath = await backupDatabase();
+    res.json({ success: true, backupPath });
+  } catch (err) {
+    console.error('Error backing up database:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Backend listening on http://localhost:${PORT}`);
