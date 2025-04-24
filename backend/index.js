@@ -15,7 +15,7 @@ import { fileURLToPath } from "url";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createCanvas, loadImage } from "canvas";
 import { processTemplate } from './templateModel.js';
-import { extractRegion } from './utils/imageUtils';
+import { extractRegion } from './utils/imageUtils.js';
 import { getDB } from './db.js';
 import { listTemplates, getTemplateDetails, backupDatabase } from './dbTools.js';
 
@@ -42,7 +42,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 const app = express();
-const PORT = 4000;
+const PORT = 8000;
 
 // public directory for audio files if it doesn't exist
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -447,6 +447,7 @@ app.post(
   "/process-screenshot",
   upload.single("screenshot"),
   async (req, res) => {
+    debugger;
     // create uploads directory if it doesn't exist
     // TODO: delete all
     if (!fs.existsSync("uploads/")) {
@@ -462,7 +463,6 @@ app.post(
 
     try {
       // detect UI elements and extract regions
-      debugger;
       const playbackInfo = await detectPlaybackBar(screenshotPath);
       console.log("Playback bar info:", playbackInfo);
       
