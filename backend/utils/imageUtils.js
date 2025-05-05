@@ -2,7 +2,7 @@
 import sharp from 'sharp';
 import path from 'path';
 import crypto from 'crypto';
-import * as tf from '@tensorflow/tfjs';
+import * as tf from '@tensorflow/tfjs-node'; 
 
 // generate perceptual hash for an image
 async function generateImageHash(imagePath) {

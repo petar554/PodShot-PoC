@@ -18,9 +18,7 @@ let model = null;
 
 // default regions to detect (can be refined by the model)
 const DEFAULT_REGIONS = {
-  podcast: { top: 0.65, left: 0.05, width: 0.9, height: 0.1 },
-  episode: { top: 0.55, left: 0.05, width: 0.9, height: 0.1 },
-  timestamp: { top: 0.75, left: 0.05, width: 0.15, height: 0.1 }
+  playbackBar: { top: 0.75, left: 0.0, width: 1.0, height: 0.15 }
 };
 
 // create a basic CNN model for template detection
@@ -48,10 +46,9 @@ async function createModel() {
   model.add(tf.layers.dense({ units: 128, activation: 'relu' }));
   model.add(tf.layers.dropout({ rate: 0.5 }));
   
-  // Output layer - 8 outputs:
-  // [podcast_top, podcast_left, podcast_width, podcast_height,
-  //  episode_top, episode_left, episode_width, episode_height]
-  model.add(tf.layers.dense({ units: 8, activation: 'sigmoid' }));
+  // output layer - 4 outputs for playback bar:
+  // [playbackBar_top, playbackBar_left, playbackBar_width, playbackBar_height]
+  model.add(tf.layers.dense({ units: 4, activation: 'sigmoid' }));
   
   // compile model
   model.compile({
@@ -100,28 +97,14 @@ async function predictRegions(features) {
     const prediction = model.predict(features.tensor.expandDims());
     const values = await prediction.data();
     
-    // extract coordinates
+    // extract coordinates for playback bar
     const regions = {
-      podcast: {
+      playbackBar: {
         top: values[0],
         left: values[1],
         width: values[2],
         height: values[3]
-      },
-      episode: {
-        top: values[4],
-        left: values[5],
-        width: values[6],
-        height: values[7]
       }
-    };
-    
-    // add timestamp region (currently hardcoded, could be extended in the model)
-    regions.timestamp = {
-      top: 0.85,
-      left: 0.05,
-      width: 0.15, 
-      height: 0.05
     };
     
     return regions;
@@ -184,11 +167,9 @@ async function trainModel(imageData, labeledRegions) {
   // prepare training data
   const xs = tf.tensor4d(imageData, [imageData.length, 224, 224, 3]);
   
-  // format labels as [podcast_top, podcast_left, podcast_width, podcast_height,
-  //                  episode_top, episode_left, episode_width, episode_height]
+  // format labels as [playbackBar_top, playbackBar_left, playbackBar_width, playbackBar_height]
   const labels = labeledRegions.map(regions => [
-    regions.podcast.top, regions.podcast.left, regions.podcast.width, regions.podcast.height,
-    regions.episode.top, regions.episode.left, regions.episode.width, regions.episode.height
+    regions.playbackBar.top, regions.playbackBar.left, regions.playbackBar.width, regions.playbackBar.height
   ]);
   
   const ys = tf.tensor2d(labels);

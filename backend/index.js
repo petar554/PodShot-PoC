@@ -106,40 +106,43 @@ async function imageHashSimple(imageBuffer) {
   }
 }
 
-// process specific regions with OCR
+// process playback bar region with OCR
 async function processRegionsWithOCR(regions) {
   const results = {};
   
-  for (const [regionName, regionPath] of Object.entries(regions)) {
-    if (!fs.existsSync(regionPath)) {
-      console.warn(`Region file does not exist: ${regionPath}`);
-      continue;
-    }
-    
+  // We're only interested in the playback bar region
+  const playbackBarPath = regions.playbackBar;
+  if (playbackBarPath && fs.existsSync(playbackBarPath)) {
     try {
-      // OCR options based on region type
-      let config = {
+      // OCR options for playback bar
+      const config = {
         lang: "eng",
         oem: 1,
-        psm: 6,
+        psm: 6, // Assume it's a block of text
       };
       
-      // OCR settings based on region type
-      if (regionName === "timestamp") {
-        config.psm = 7; // Treat as single line of text
-        config.tessedit_char_whitelist = "0123456789:-.";
-      } else if (regionName === "podcast" || regionName === "episode") {
-        config.psm = 6; // Assume it's a block of uniform text
+      // perform OCR on the playback bar region
+      const text = await tesseract.recognize(playbackBarPath, config);
+      results.playbackBar = text.trim();
+      
+      // Try to extract podcast, episode, and timestamp from the playback bar text
+      const lines = results.playbackBar.split('\n').filter(line => line.trim());
+      if (lines.length >= 2) {
+        // Attempt to extract information from the playback bar text
+        // This is a simple heuristic and may need adjustment
+        results.episode = lines[0] || "";
+        results.podcast = lines.length > 2 ? lines[1] : "";
+        
+        // Try to find timestamp in the text
+        const timestampMatch = results.playbackBar.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+        results.timestamp = timestampMatch ? timestampMatch[0] : "";
       }
       
-      // perform OCR on the region
-      const text = await tesseract.recognize(regionPath, config);
-      results[regionName] = text.trim();
-      
-      fs.unlinkSync(regionPath);
+      // Keep the playback bar image in uploads folder instead of deleting it
+      console.log(`Saved playback bar image to: ${playbackBarPath}`);
     } catch (err) {
-      console.error(`Error processing region ${regionName}:`, err);
-      results[regionName] = "";
+      console.error(`Error processing playback bar region:`, err);
+      results.playbackBar = "";
     }
   }
   
@@ -386,52 +389,111 @@ app.get("/", (req, res) => {
 });
 
 async function detectPlaybackBar(imagePath) {
-  console.log("Detecting bounding box for playback bar in:", imagePath);
+  console.log("Detecting playback bar region in:", imagePath);
 
   try {
     // process the image with our template model
     const template = await processTemplate(imagePath);
     
-    //extract regions based on template
-    const regions = {};
-    const templateRegions = template.regions || {};
-    
-    for (const [regionName, regionConfig] of Object.entries(templateRegions)) {
-      const regionPath = path.join(
-        "uploads", 
-        `${path.basename(imagePath, path.extname(imagePath))}_${regionName}${path.extname(imagePath)}`
-      );
-      
-      const extractedRegion = await extractRegion(imagePath, regionConfig, regionPath);
-      if (extractedRegion) {
-        regions[regionName] = regionPath;
-      }
-    }
-    
     // get image dimensions
     const metadata = await sharp(imagePath).metadata();
     const { width, height } = metadata;
     
+    // extract the playback bar region from the template
+    const playbackBarRegion = template.regions?.playbackBar || {
+      top: 0.75,
+      left: 0.0,
+      width: 1.0,
+      height: 0.15
+    };
+    
+    // calculate absolute coordinates based on relative values
+    const x = Math.floor(width * playbackBarRegion.left);
+    const y = Math.floor(height * playbackBarRegion.top);
+    const regionWidth = Math.floor(width * playbackBarRegion.width);
+    const regionHeight = Math.floor(height * playbackBarRegion.height);
+    
+    // extract the playback bar region
+    const playbackBarPath = path.join(
+      "uploads", 
+      `${path.basename(imagePath, path.extname(imagePath))}_playbackBar${path.extname(imagePath)}`
+    );
+    
+    try {
+      // image dimensions
+      const metadata = await sharp(imagePath).metadata();
+      console.log("Image dimensions:", metadata.width, "x", metadata.height);
+      
+      // new buffer from the image
+      const imageBuffer = await fs.promises.readFile(imagePath);
+      
+      // new Sharp instance from the buffer
+      const image = sharp(imageBuffer);
+      
+      //TODO: now we use fixed coordinates that match the red-highlighted area in the example image
+      // This is approximately the bottom 15-20% of the image
+      const playbackBarHeight = Math.floor(metadata.height * 0.20); 
+      const playbackBarTop = Math.floor(metadata.height * 0.55);
+      
+      console.log("Extracting playback bar region with coordinates:", {
+        left: 0,
+        top: playbackBarTop,
+        width: metadata.width,
+        height: playbackBarHeight
+      });
+      
+      // extract just the playback bar region
+      await image
+        .extract({
+          left: 0,
+          top: playbackBarTop,
+          width: metadata.width,
+          height: playbackBarHeight
+        })
+        .toFile(playbackBarPath);
+      
+      console.log(`Playback bar image saved to: ${playbackBarPath}`);
+    } catch (err) {
+      console.error("Error processing playback bar region:", err);
+      // If extraction fails, we'll continue without the extracted region
+    }
+    
     return {
-      x: 0,
-      y: Math.floor(height * 0.8),
-      width: width,
-      height: Math.floor(height * 0.2),
+      x: x,
+      y: y,
+      width: regionWidth,
+      height: regionHeight,
       template: template.name || 'default',
-      regions: regions
+      regions: { playbackBar: playbackBarPath }
     };
   } catch (err) {
     console.error("Error in playback bar detection:", err);
     
-    // fallback to default if detection fails
-    return {
-      x: 100,
-      y: 300,
-      width: 200,
-      height: 60,
-      template: "default",
-      regions: {}
-    };
+    // get image dimensions for fallback
+    try {
+      const metadata = await sharp(imagePath).metadata();
+      const { width, height } = metadata;
+      
+      // fallback to default if detection fails - use bottom 15% of the image
+      return {
+        x: 0,
+        y: Math.floor(height * 0.75),
+        width: width,
+        height: Math.floor(height * 0.15),
+        template: "default",
+        regions: {}
+      };
+    } catch (e) {
+      // if we can't even get image dimensions, use hardcoded values
+      return {
+        x: 0,
+        y: 300,
+        width: 400,
+        height: 100,
+        template: "default",
+        regions: {}
+      };
+    }
   }
 }
 
@@ -462,25 +524,32 @@ app.post(
     const screenshotPath = req.file.path;
 
     try {
-      // detect UI elements and extract regions
+      // detect playback bar region
       const playbackInfo = await detectPlaybackBar(screenshotPath);
       console.log("Playback bar info:", playbackInfo);
       
-      // process extracted regions with OCR if available
+      // process playback bar region with OCR if available
       let templateData = {};
       if (playbackInfo.regions && Object.keys(playbackInfo.regions).length > 0) {
         templateData = await processRegionsWithOCR(playbackInfo.regions);
-        console.log("Template-based OCR results:", templateData);
+        console.log("Playback bar OCR results:", templateData);
       }
 
-      // fallback to full image OCR if template extraction failed
+      // perform OCR on the full image as a fallback
       const ocrText = await getOcrText(screenshotPath);
       console.log("Full OCR result:", ocrText);
 
-      // 1) use template data if available, otherwise fall back to Gemini
-      let podcast = templateData.podcast || "";
-      let episode = templateData.episode || "";
-      let timestamp = templateData.timestamp || "";
+      // extract information from OCR results
+      // first try to get from playback bar region, then fall back to full image OCR
+      let podcast = templateData.playbackBar || "";
+      let episode = "";
+      let timestamp = "";
+      
+      // try to extract timestamp from OCR text
+      const timestampMatch = ocrText.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if (timestampMatch) {
+        timestamp = timestampMatch[0];
+      }
       
       // if template extraction failed, use Gemini as backup
       if (!podcast || !episode || !timestamp) {
