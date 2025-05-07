@@ -22,9 +22,31 @@ import { listTemplates, getTemplateDetails, backupDatabase } from './dbTools.js'
 // Initialize Google Speech-to-Text client
 // const speechClient = new speech.SpeechClient();
 // const keyFilePath = path.join(__dirname, 'nimble-petal-453918-q5-8ef417a842d5.json');
-const speechClient = new speech.SpeechClient({
-  keyFilename: "C:/keys/nimble-petal-453918-q5-8ef417a842d5.json",
-});
+let speechClient;
+try {
+  // TODO
+  // Try to initialize with the key file
+  speechClient = new speech.SpeechClient({
+    keyFilename: "C:/keys/nimble-petal-453918-q5-0a427ef558fc.json",
+  });
+  console.log("Speech client initialized with key file");
+} catch (err) {
+  console.warn("Warning: Could not initialize Speech client with key file:", err.message);
+  console.warn("Falling back to application default credentials or environment variables");
+  try {
+    speechClient = new speech.SpeechClient();
+    console.log("Speech client initialized with application default credentials");
+  } catch (fallbackErr) {
+    console.error("Failed to initialize Speech client:", fallbackErr.message);
+    console.error("Speech-to-text functionality will not work properly");
+    // client mock to prevent application crashes
+    speechClient = {
+      recognize: async () => {
+        return [{ results: [{ alternatives: [{ transcript: "Speech-to-text unavailable: credentials not found" }] }] }];
+      }
+    };
+  }
+}
 
 // for ESM __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -554,9 +576,12 @@ app.post(
       // if template extraction failed, use Gemini as backup
       if (!podcast || !episode || !timestamp) {
         const geminiResults = await parseWithGemini(screenshotPath);
-        podcast = podcast || geminiResults.podcast || "";
-        episode = episode || geminiResults.episode || "";
-        timestamp = timestamp || geminiResults.timestamp || "";
+        podcast = geminiResults.podcast || "";
+        episode = geminiResults.episode || "";
+        timestamp = geminiResults.timestamp || "";
+        // podcast = podcast || geminiResults.podcast || "";
+        // episode = episode || geminiResults.episode || "";
+        // timestamp = timestamp || geminiResults.timestamp || "";
       }
 
       const guessedTitle = podcast || "";
