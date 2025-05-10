@@ -579,6 +579,7 @@ app.post(
         podcast = geminiResults.podcast || "";
         episode = geminiResults.episode || "";
         timestamp = geminiResults.timestamp || "";
+        //#TODO
         // podcast = podcast || geminiResults.podcast || "";
         // episode = episode || geminiResults.episode || "";
         // timestamp = timestamp || geminiResults.timestamp || "";
@@ -617,6 +618,7 @@ app.post(
       });
       fs.writeFileSync(fullAudioPath, audioResp.data);
 
+      // #TODO
       // 4) extract 5s around snippet
       const snippetFilename = `snippet_${Date.now()}.mp3`;
       const snippetPath = path.join(AUDIO_DIR, snippetFilename);

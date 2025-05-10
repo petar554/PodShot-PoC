@@ -21,6 +21,7 @@ const DEFAULT_REGIONS = {
   playbackBar: { top: 0.75, left: 0.0, width: 1.0, height: 0.15 }
 };
 
+// TODO: better model is needed
 // create a basic CNN model for template detection
 async function createModel() {
   // Create a sequential model
@@ -158,6 +159,7 @@ async function processTemplate(imagePath) {
   }
 }
 
+// #TODO
 // train model with new data
 async function trainModel(imageData, labeledRegions) {
   if (!model) {
