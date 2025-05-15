@@ -1,12 +1,22 @@
 import React, { useState } from 'react';
-import { View, Text, Button, Image, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import LandingPage from './src/components/LandingPage';
 
-const API_URL = '*************'
+const API_URL = 'http://192.168.3.15:4000';
 
 export default function App() {
+  const [showLanding, setShowLanding] = useState(true);
   const [screenshotUri, setScreenshotUri] = useState(null);
   const [responseData, setResponseData] = useState(null);
+
+  const handleGetStarted = () => {
+    setShowLanding(false);
+  };
+
+  const handleLogin = () => {
+    setShowLanding(false);
+  };
 
   const pickImage = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -73,30 +83,26 @@ export default function App() {
     }
   };
   
+  if (showLanding) {
+    return (
+      <LandingPage 
+        onGetStarted={handleGetStarted} 
+        onLogin={handleLogin} 
+      />
+    );
+  }
+
   return (
     <View style={styles.container}>
-
-      <Text style={styles.header}>PodShot Proof-of-Concept</Text>
-      <Button title="Pick Screenshot" onPress={pickImage} />
-      {screenshotUri && (
-        <Image source={{ uri: screenshotUri }} style={styles.image} />
-      )}
-      <Button title="Upload + Process" onPress={uploadScreenshot} />
-      {responseData && (
-        <View style={styles.resultBox}>
-          <Text style={styles.resultText}>
-            {JSON.stringify(responseData, null, 2)}
-          </Text>
-        </View>
-      )}
+      {/* Original app content will go here */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { marginTop: 50, padding: 20 },
-  header: { fontSize: 18, marginBottom: 10 },
-  image: { width: 200, height: 200, alignSelf: 'center', marginVertical: 10 },
-  resultBox: { marginTop: 20 },
-  resultText: { fontSize: 14 }
+  container: { 
+    flex: 1,
+    marginTop: 50, 
+    padding: 20 
+  },
 });
