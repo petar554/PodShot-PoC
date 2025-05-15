@@ -2,20 +2,42 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import LandingPage from './src/components/LandingPage';
+import CreateAccountPage from './src/components/CreateAccountPage';
 
 const API_URL = 'http://192.168.3.15:4000';
 
 export default function App() {
-  const [showLanding, setShowLanding] = useState(true);
+  const [currentPage, setCurrentPage] = useState('landing');
   const [screenshotUri, setScreenshotUri] = useState(null);
   const [responseData, setResponseData] = useState(null);
 
   const handleGetStarted = () => {
-    setShowLanding(false);
+    console.log('Get Started button pressed');
+    setCurrentPage('createAccount');
   };
 
   const handleLogin = () => {
-    setShowLanding(false);
+    // for now, this will just go to the main app
+    setCurrentPage('main');
+  };
+  
+  const handleBackToLanding = () => {
+    setCurrentPage('landing');
+  };
+  
+  const handleGoogleLogin = () => {
+    Alert.alert('Google Login', 'Google login functionality will be implemented here.');
+    setCurrentPage('main');
+  };
+  
+  const handleAppleLogin = () => {
+    Alert.alert('Apple Login', 'Apple login functionality will be implemented here.');
+    setCurrentPage('main');
+  };
+  
+  const handleEmailLogin = () => {
+    Alert.alert('Email Login', 'Email login functionality will be implemented here.');
+    setCurrentPage('main');
   };
 
   const pickImage = async () => {
@@ -83,7 +105,7 @@ export default function App() {
     }
   };
   
-  if (showLanding) {
+  if (currentPage === 'landing') {
     return (
       <LandingPage 
         onGetStarted={handleGetStarted} 
@@ -91,10 +113,21 @@ export default function App() {
       />
     );
   }
+  
+  if (currentPage === 'createAccount') {
+    return (
+      <CreateAccountPage 
+        onBack={handleBackToLanding}
+        onGoogleLogin={handleGoogleLogin}
+        onAppleLogin={handleAppleLogin}
+        onEmailLogin={handleEmailLogin}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Original app content will go here */}
+      {/* main app content will go here */}
     </View>
   );
 }

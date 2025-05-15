@@ -20,7 +20,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => {
       <PodcastGrid />
       
       {/* dark overlay */}
-      <View style={styles.darkOverlay} />
+      <View style={styles.darkOverlay} pointerEvents="none"/>
       
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
