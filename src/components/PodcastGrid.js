@@ -13,9 +13,12 @@ const PodcastGrid = () => {
     { id: 7, color: '#3498db' }, // Making Sense (blue)
     { id: 8, color: '#1abc9c' }, // The Daily (teal)
     { id: 9, color: '#e74c3c' }, // This American Life (red)
-    { id: 10, color: '#2ecc71' }, // Invest Like The Best (green)
-    { id: 11, color: '#34495e' }, // Lex Fridman Podcast (dark blue)
-    { id: 12, color: '#95a5a6' }, // Hidden Brain (gray)
+    { id: 10, color: '#2ecc71'}, // Invest Like The Best (green)
+    { id: 11, color: '#34495e'}, // Lex Fridman Podcast (dark blue)
+    { id: 12, color: '#95a5a6'}, // Hidden Brain (gray)
+    { id: 13, color: '#2ecc71' },
+    { id: 14, color: '#9b59b6' },
+    { id: 15, color: '#f39c12' },
   ];
 
   return (

@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(15, 22, 36, 0.7)',
+    backgroundColor: 'rgba(15, 22, 36, 0.4)',
     zIndex: 1,
   },
   scrollContent: {
