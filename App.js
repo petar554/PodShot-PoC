@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import LandingPage from './src/components/LandingPage';
 import CreateAccountPage from './src/components/CreateAccountPage';
 
-const API_URL = 'http://192.168.3.15:4000';
+const API_URL = 'http://192.168.1.232:4000';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('landing');
@@ -74,7 +74,7 @@ export default function App() {
       });
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60-second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       const res = await fetch(`${API_URL}/process-screenshot`, {
         method: 'POST',
