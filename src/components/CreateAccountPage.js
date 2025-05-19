@@ -1,5 +1,6 @@
 import React from 'react';
-import { 
+import {
+  ActivityIndicator, 
   View, 
   Text, 
   StyleSheet, 
@@ -14,6 +15,19 @@ import PodcastGrid from './PodcastGrid';
 const { width, height } = Dimensions.get('window');
 
 const CreateAccountPage = ({ onBack, onGoogleLogin, onAppleLogin, onEmailLogin }) => {
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    try {
+      await onGoogleLogin();
+    } catch (error) {
+      console.error('Google login error:', error);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -53,18 +67,25 @@ const CreateAccountPage = ({ onBack, onGoogleLogin, onAppleLogin, onEmailLogin }
           <Text style={styles.subheading}>
             Join 200,000+ podcast fans on{'\n'}their knowledge journey
           </Text>
-          
-          <TouchableOpacity 
-            style={[styles.loginButton, styles.googleButton]}
-            onPress={onGoogleLogin}
-          >
-            <View style={styles.buttonContent}>
-              <View style={styles.googleIconContainer}>
-                <Text style={styles.googleIcon}>G</Text>
+
+           <TouchableOpacity 
+              style={[styles.loginButton, styles.googleButton]}
+              onPress={handleGoogleLogin}
+              disabled={isGoogleLoading}
+            >
+              <View style={styles.buttonContent}>
+                <View style={styles.googleIconContainer}>
+                  {isGoogleLoading ? (
+                    <ActivityIndicator size="small" color="#0f1624" />
+                  ) : (
+                    <Text style={styles.googleIcon}>G</Text>
+                  )}
+                </View>
+                <Text style={styles.loginButtonText}>
+                  {isGoogleLoading ? 'Signing in...' : 'Continue with Google'}
+                </Text>
               </View>
-              <Text style={styles.loginButtonText}>Continue with Google</Text>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
           
           <TouchableOpacity 
             style={[styles.loginButton, styles.appleButton]}
