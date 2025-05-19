@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import LandingPage from './src/components/LandingPage';
 import CreateAccountPage from './src/components/CreateAccountPage';
 
+// #TODO: add to env file
 const API_URL = 'http://192.168.1.232:4000';
 
 export default function App() {
