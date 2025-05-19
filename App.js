@@ -1,16 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import LandingPage from './src/components/LandingPage';
 import CreateAccountPage from './src/components/CreateAccountPage';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 
-// #TODO: add to env file
 const API_URL = 'http://192.168.1.232:4000';
 
-export default function App() {
+function AppContent() {
+  const { user, loading, signInWithGoogle, signOut } = useAuth();
   const [currentPage, setCurrentPage] = useState('landing');
   const [screenshotUri, setScreenshotUri] = useState(null);
   const [responseData, setResponseData] = useState(null);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    if (user && currentPage !== 'main') {
+      setCurrentPage('main');
+    }
+  }, [user]);
 
   const handleGetStarted = () => {
     console.log('Get Started button pressed');
@@ -26,9 +34,14 @@ export default function App() {
     setCurrentPage('landing');
   };
   
-  const handleGoogleLogin = () => {
-    Alert.alert('Google Login', 'Google login functionality will be implemented here.');
-    setCurrentPage('main');
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithGoogle();
+      // navigation to main page will happen automatically due to the useEffect
+    } catch (error) {
+      console.error('Google login error:', error);
+      Alert.alert('Login Failed', 'Could not sign in with Google. Please try again.');
+    }
   };
   
   const handleAppleLogin = () => {
@@ -106,6 +119,11 @@ export default function App() {
     }
   };
   
+  if (loading) {
+    // #TODO: add loading screen here
+    return <View style={styles.container} />;
+  }
+  
   if (currentPage === 'landing') {
     return (
       <LandingPage 
@@ -130,6 +148,14 @@ export default function App() {
     <View style={styles.container}>
       {/* main app content will go here */}
     </View>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
