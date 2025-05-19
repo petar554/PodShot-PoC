@@ -29,6 +29,10 @@
         "projectId": "45de2583-9434-441c-9089-762f0de1b8fc"
       }
     },
-    "owner": "petarpan"
+    "owner": "petarpan",
+    "plugins": [
+      "expo-web-browser",
+      "expo-secure-store"
+    ]
   }
 }

@@ -18,7 +18,10 @@
     "metro-config": "^0.81.1",
     "react": "19.0.0",
     "react-native": "0.79.2",
-    "expo-dev-client": "~5.1.8"
+    "expo-dev-client": "~5.1.8",
+    "expo-auth-session": "~6.1.5",
+    "expo-web-browser": "~14.1.6",
+    "expo-secure-store": "~14.2.3"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"
