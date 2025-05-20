@@ -16,7 +16,7 @@
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@google-cloud/speech": "^6.7.1",
     "@google/generative-ai": "^0.24.0",
-    "@supabase/supabase-js": "^2.48.1",
+    "@supabase/supabase-js": "^2.49.7",
     "@tensorflow/tfjs-node": "^4.22.0",
     "axios": "^1.7.9",
     "better-sqlite3": "^11.9.1",
