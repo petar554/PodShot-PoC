@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   ActivityIndicator, 
   View, 
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(15, 22, 36, 0.4)',
-    zIndex: 1,
+    // zIndex: 1,
   },
   scrollContent: {
     flexGrow: 1,
