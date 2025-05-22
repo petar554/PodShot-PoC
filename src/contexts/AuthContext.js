@@ -59,12 +59,20 @@ export const AuthProvider = ({ children }) => {
   // auth methods
   const handleSignInWithGoogle = async () => {
     try {
-      const { session, user } = await signInWithGoogle();
-      setSession(session);
-      setUser(user);
-      return { session, user };
+      console.log('AuthContext: Starting Google sign-in');
+      const result = await signInWithGoogle();
+      console.log('AuthContext: Sign-in result:', result);
+      
+      if (result && result.session) {
+        setSession(result.session);
+        setUser(result.session.user);
+        return { session: result.session, user: result.session.user };
+      } else {
+        console.warn('AuthContext: No session in sign-in result');
+        return null;
+      }
     } catch (error) {
-      console.error('Error in handleSignInWithGoogle:', error);
+      console.error('AuthContext: Error in handleSignInWithGoogle:', error);
       throw error;
     }
   };

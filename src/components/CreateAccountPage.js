@@ -11,6 +11,7 @@ import {
   ScrollView
 } from 'react-native';
 import PodcastGrid from './PodcastGrid';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 const { width, height } = Dimensions.get('window');
 
@@ -78,7 +79,11 @@ const CreateAccountPage = ({ onBack, onGoogleLogin, onAppleLogin, onEmailLogin }
                   {isGoogleLoading ? (
                     <ActivityIndicator size="small" color="#0f1624" />
                   ) : (
-                    <Text style={styles.googleIcon}>G</Text>
+                    <Image 
+                      source={{ uri: 'https://developers.google.com/identity/images/g-logo.png' }}
+                      style={{ width: 20, height: 20 }}
+                      resizeMode="contain"
+                    />
                   )}
                 </View>
                 <Text style={styles.loginButtonText}>

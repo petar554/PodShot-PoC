@@ -36,11 +36,24 @@ function AppContent() {
   
   const handleGoogleLogin = async () => {
     try {
-      await signInWithGoogle();
+      console.log('App: Starting Google login process');
+      const result = await signInWithGoogle();
+      console.log('App: Google login result:', result);
+      
       // navigation to main page will happen automatically due to the useEffect
+      if (!result) {
+        console.warn('App: No result from Google login');
+        Alert.alert(
+          'Login Incomplete', 
+          'The login process was not completed. Please try again.'
+        );
+      }
     } catch (error) {
-      console.error('Google login error:', error);
-      Alert.alert('Login Failed', 'Could not sign in with Google. Please try again.');
+      console.error('App: Google login error:', error);
+      Alert.alert(
+        'Login Failed', 
+        `Could not sign in with Google: ${error.message || 'Unknown error'}. Please try again.`
+      );
     }
   };
   
