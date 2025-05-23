@@ -4,11 +4,10 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 
-// Initialize Google Sign In
-// The webClientId should be your Google OAuth client ID without any http:// prefix
+// webClientId is Google OAuth client ID without any http:// prefix
 GoogleSignin.configure({
   // Correct format for webClientId (remove http:// prefix)
-  webClientId: '********-apps.googleusercontent.com',
+  webClientId: '644963085990-n1kg20nc39ppjl90uih5lvjvq4u6q72r.apps.googleusercontent.com',
   offlineAccess: true,
 });
 
@@ -17,16 +16,16 @@ export const signInWithGoogle = async () => {
   try {
     console.log('Starting Google sign in process');
     
-    // Different approach based on platform
+    // different approach based on platform
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
-      // For native platforms, use the native Google Sign In
+      // for native platforms, use the native Google Sign In
       try {
-        // Check if play services are available (Android only)
+        // check if play services are available (Android only)
         if (Platform.OS === 'android') {
           await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
         }
         
-        // Sign in with Google
+        // sign in with Google
         const { idToken } = await GoogleSignin.signIn();
         console.log('Google sign in successful, got ID token');
         
@@ -34,7 +33,7 @@ export const signInWithGoogle = async () => {
           throw new Error('No ID token returned from Google Sign In');
         }
         
-        // Sign in to Supabase with the Google ID token
+        // sign in to Supabase with the Google ID token
         const { data, error } = await supabase.auth.signInWithIdToken({
           provider: 'google',
           token: idToken,
@@ -50,11 +49,11 @@ export const signInWithGoogle = async () => {
       } catch (nativeError) {
         console.error('Native Google Sign In failed, falling back to browser:', nativeError);
         
-        // If native sign-in fails, fall back to browser-based OAuth
+        // if native sign-in fails, fall back to browser-based OAuth
         return await signInWithGoogleBrowser();
       }
     } else {
-      // For web or other platforms, use browser-based OAuth
+      // for web or other platforms, use browser-based OAuth
       return await signInWithGoogleBrowser();
     }
   } catch (error) {
@@ -63,7 +62,7 @@ export const signInWithGoogle = async () => {
   }
 };
 
-// Browser-based Google Sign In (fallback method)
+// browser-based Google Sign In (fallback method)
 const signInWithGoogleBrowser = async () => {
   try {
     console.log('Starting browser-based Google sign in');

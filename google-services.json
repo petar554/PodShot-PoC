@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "644963085990",
+    "project_id": "your-project-id",
+    "storage_bucket": "your-project-id.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:644963085990:android:your-app-id",
+        "android_client_info": {
+          "package_name": "com.petarpan.shotcast"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "644963085990-your-android-client-id.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.petarpan.shotcast",
+            "certificate_hash": "your-certificate-hash"
+          }
+        },
+        {
+          "client_id": "644963085990-n1kg20nc39ppjl90uih5lvjvq4u6q72r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "your-api-key"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "644963085990-n1kg20nc39ppjl90uih5lvjvq4u6q72r.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "644963085990-your-ios-client-id.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.petarpan.shotcast"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
