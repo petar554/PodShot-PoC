@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { supabase } from '../lib/supabase';
-import { signInWithGoogle, signOut, getCurrentUser } from '../services/authService';
+import { signInWithGoogle, signInWithMagicLink, signOut, getCurrentUser } from '../services/authService';
 
 // create context
 const AuthContext = createContext({
@@ -77,6 +77,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const handleSignInWithMagicLink = async (email) => {
+    try {
+      console.log('AuthContext: Starting magic link sign-in for:', email);
+      const result = await signInWithMagicLink(email);
+      console.log('AuthContext: Magic link sent successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('AuthContext: Error in handleSignInWithMagicLink:', error);
+      throw error;
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -94,6 +106,7 @@ export const AuthProvider = ({ children }) => {
     session,
     loading,
     signInWithGoogle: handleSignInWithGoogle,
+    signInWithMagicLink: handleSignInWithMagicLink,
     signOut: handleSignOut,
   };
 

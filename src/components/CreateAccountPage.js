@@ -11,12 +11,16 @@ import {
   ScrollView
 } from 'react-native';
 import PodcastGrid from './PodcastGrid';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import EmailAuthModal from './EmailAuthModal';
+import { useAuth } from '../contexts/AuthContext';
+// import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 const { width, height } = Dimensions.get('window');
 
 const CreateAccountPage = ({ onBack, onGoogleLogin, onAppleLogin, onEmailLogin }) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const { signInWithMagicLink } = useAuth();
   
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
@@ -27,6 +31,24 @@ const CreateAccountPage = ({ onBack, onGoogleLogin, onAppleLogin, onEmailLogin }
     } finally {
       setIsGoogleLoading(false);
     }
+  };
+
+  const handleEmailLogin = () => {
+    setShowEmailModal(true);
+  };
+
+  const handleSendMagicLink = async (email) => {
+    try {
+      await signInWithMagicLink(email);
+      // modal will show success state automatically
+    } catch (error) {
+      console.error('Error sending magic link:', error);
+      throw error; // Re-throw so the modal can handle the error
+    }
+  };
+
+  const handleCloseEmailModal = () => {
+    setShowEmailModal(false);
   };
 
   return (
@@ -106,7 +128,7 @@ const CreateAccountPage = ({ onBack, onGoogleLogin, onAppleLogin, onEmailLogin }
           
           <TouchableOpacity 
             style={[styles.loginButton, styles.emailButton]}
-            onPress={onEmailLogin}
+            onPress={handleEmailLogin}
           >
             <View style={styles.buttonContent}>
               <View style={styles.emailIconContainer}>
@@ -117,6 +139,13 @@ const CreateAccountPage = ({ onBack, onGoogleLogin, onAppleLogin, onEmailLogin }
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Email Authentication Modal */}
+      <EmailAuthModal
+        visible={showEmailModal}
+        onClose={handleCloseEmailModal}
+        onSendMagicLink={handleSendMagicLink}
+      />
     </View>
   );
 };
