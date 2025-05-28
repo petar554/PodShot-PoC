@@ -3,13 +3,14 @@ import { View, StyleSheet, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import LandingPage from './src/components/LandingPage';
 import CreateAccountPage from './src/components/CreateAccountPage';
+import ScreenshotPage from './src/components/ScreenshotPage';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 
 const API_URL = 'http://192.168.1.232:4000';
 
 function AppContent() {
   const { user, loading, signInWithGoogle, signOut } = useAuth();
-  const [currentPage, setCurrentPage] = useState('landing');
+  const [currentPage, setCurrentPage] = useState('screenshotPage');
   const [screenshotUri, setScreenshotUri] = useState(null);
   const [responseData, setResponseData] = useState(null);
 
@@ -65,6 +66,18 @@ function AppContent() {
   const handleEmailLogin = () => {
     Alert.alert('Email Login', 'Email login functionality will be implemented here.');
     setCurrentPage('main');
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setCurrentPage('landing');
+      setScreenshotUri(null);
+      setResponseData(null);
+    } catch (error) {
+      console.error('Sign out error:', error);
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
   };
 
   const pickImage = async () => {
@@ -157,11 +170,18 @@ function AppContent() {
     );
   }
 
-  return (
-    <View style={styles.container}>
-      {/* main app content will go here */}
-    </View>
-  );
+    if (currentPage === 'screenshotPage') {
+      return (
+        <ScreenshotPage
+          screenshotUri={screenshotUri}
+          responseData={responseData}
+          onPickImage={pickImage}
+          onUploadScreenshot={uploadScreenshot}
+          onSignOut={handleSignOut}
+        />
+      );
+    }
+
 }
 
 export default function App() {
