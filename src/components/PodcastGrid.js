@@ -2,31 +2,40 @@ import React from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 
 const PodcastGrid = () => {
-  // #TODO: Replace with actual podcast images
+  // Using actual podcast images from assets
   const podcastImages = [
-    { id: 1, color: '#f0a30a' }, // Tim Ferriss Show (yellow)
-    { id: 2, color: '#0e91d3' }, // Huberman Lab (blue)
-    { id: 3, color: '#e74c3c' }, // Knowledge Project (red)
-    { id: 4, color: '#2ecc71' }, // Another podcast (green)
-    { id: 5, color: '#9b59b6' }, // Another podcast (purple)
-    { id: 6, color: '#f39c12' }, // Tim Ferriss Show again (orange)
-    { id: 7, color: '#3498db' }, // Making Sense (blue)
-    { id: 8, color: '#1abc9c' }, // The Daily (teal)
-    { id: 9, color: '#e74c3c' }, // This American Life (red)
-    { id: 10, color: '#2ecc71'}, // Invest Like The Best (green)
-    { id: 11, color: '#34495e'}, // Lex Fridman Podcast (dark blue)
-    { id: 12, color: '#95a5a6'}, // Hidden Brain (gray)
-    { id: 13, color: '#2ecc71' },
-    { id: 14, color: '#9b59b6' },
-    { id: 15, color: '#f39c12' },
+    { id: 1, source: require('../../assets/GridImages/1.jpeg') },
+    { id: 2, source: require('../../assets/GridImages/2.jpg') },
+    { id: 3, source: require('../../assets/GridImages/3.jpeg') },
+    { id: 4, source: require('../../assets/GridImages/5.jpeg') },
+    { id: 5, source: require('../../assets/GridImages/6.jpeg') },
+    { id: 6, source: require('../../assets/GridImages/ab6765630000ba8ab85311900115d459884cae79.jpeg') },
+    { id: 7, source: require('../../assets/GridImages/download(1).jpeg') },
+    { id: 8, source: require('../../assets/GridImages/download(2).jpeg') },
+    { id: 9, source: require('../../assets/GridImages/download(3).jpeg') },
+    { id: 10, source: require('../../assets/GridImages/download(4).jpeg') },
+    { id: 11, source: require('../../assets/GridImages/download.jpeg') },
+    { id: 12, source: require('../../assets/GridImages/image.jpg') },
+    { id: 13, source: require('../../assets/GridImages/download(1).png') },
+    { id: 14, source: require('../../assets/GridImages/download(2).png') },
+    { id: 15, source: require('../../assets/GridImages/download(3).png') },
+    { id: 16, source: require('../../assets/GridImages/download(4).png') },
+    { id: 17, source: require('../../assets/GridImages/download.png') },
   ];
+
+  // shuffle the array to get a random arrangement of podcast images
+  const shuffledImages = [...podcastImages].sort(() => 0.5 - Math.random());
+  // Take only the first 16 images (4x4 grid)
+  const displayImages = shuffledImages.slice(0, 16);
 
   return (
     <View style={styles.container}>
-      {podcastImages.map((podcast) => (
-        <View 
+      {displayImages.map((podcast) => (
+        <Image 
           key={podcast.id} 
-          style={[styles.podcastThumbnail, { backgroundColor: podcast.color }]}
+          source={podcast.source}
+          style={styles.podcastThumbnail}
+          resizeMode="cover"
         />
       ))}
     </View>
