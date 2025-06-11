@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,21 +10,33 @@ import {
   Alert
 } from 'react-native';
 import PodcastGrid from './PodcastGrid';
+import PodcastSelector from './PodcastSelector';
 
 const ScreenshotPage = ({ 
   screenshotUri, 
   responseData, 
   onPickImage, 
   onUploadScreenshot,
-  onSignOut 
+  onSignOut,
+  onPodcastEpisodeSelected
 }) => {
+  const [selectedPodcast, setSelectedPodcast] = useState(null);
+  const [selectedEpisode, setSelectedEpisode] = useState(null);
   
   const handlePickImage = () => {
     onPickImage();
   };
 
   const handleUploadScreenshot = () => {
-    onUploadScreenshot();
+    onUploadScreenshot(selectedPodcast, selectedEpisode);
+  };
+
+  const handlePodcastEpisodeSelected = (podcast, episode) => {
+    setSelectedPodcast(podcast);
+    setSelectedEpisode(episode);
+    if (onPodcastEpisodeSelected) {
+      onPodcastEpisodeSelected(podcast, episode);
+    }
   };
 
   const handleSignOut = () => {
@@ -72,8 +84,11 @@ const ScreenshotPage = ({
         <View style={styles.content}>
           <Text style={styles.title}>Screenshot Processor</Text>
           <Text style={styles.subtitle}>
-            Pick a screenshot and let AI extract podcast insights
+            Select a podcast and episode, then pick a screenshot
           </Text>
+
+          {/* podcast and episode selection */}
+          <PodcastSelector onPodcastEpisodeSelected={handlePodcastEpisodeSelected} />
 
           {/* Pick Image Button */}
           <TouchableOpacity 
@@ -116,14 +131,16 @@ const ScreenshotPage = ({
               </View>
               
               <View style={styles.resultBox}>
-                <ScrollView style={styles.resultScrollView}>
-                  <Text style={styles.resultText}>
-                    {typeof responseData === 'string' 
-                      ? responseData 
-                      : JSON.stringify(responseData, null, 2)
-                    }
-                  </Text>
-                </ScrollView>
+                <Text 
+                  style={styles.resultText}
+                  numberOfLines={15}
+                  ellipsizeMode="tail"
+                >
+                  {typeof responseData === 'string' 
+                    ? responseData 
+                    : JSON.stringify(responseData, null, 2)
+                  }
+                </Text>
               </View>
             </View>
           )}
@@ -264,9 +281,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     maxHeight: 300,
-  },
-  resultScrollView: {
-    maxHeight: 268,
   },
   resultText: {
     color: 'white',

@@ -5,11 +5,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  FlatList,
+  ScrollView,
   ActivityIndicator
 } from 'react-native';
 
-// Import API_URL from a central location to ensure consistency
 const API_URL = 'http://192.168.12.22:4000';
 
 const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
@@ -23,7 +22,7 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
   const [showPodcastDropdown, setShowPodcastDropdown] = useState(false);
   const [showEpisodeDropdown, setShowEpisodeDropdown] = useState(false);
 
-  // Search for podcasts when the search term changes
+  // search for podcasts when the search term changes
   useEffect(() => {
     const searchPodcasts = async () => {
       if (podcastSearch.length < 2) {
@@ -41,7 +40,7 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
         );
         const data = await response.json();
         
-        // Extract unique podcasts by collectionId
+        // extract unique podcasts by collectionId
         const uniquePodcasts = [];
         const podcastIds = new Set();
         
@@ -60,7 +59,7 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
         setPodcasts(uniquePodcasts);
       } catch (error) {
         console.error('Error searching podcasts:', error);
-        // Show empty results but don't crash
+        // show empty results but don't crash
         setPodcasts([]);
       } finally {
         setIsLoadingPodcasts(false);
@@ -71,7 +70,7 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
     return () => clearTimeout(debounceTimeout);
   }, [podcastSearch]);
 
-  // Fetch episodes when a podcast is selected
+  // fetch episodes when a podcast is selected
   useEffect(() => {
     const fetchEpisodes = async () => {
       if (!selectedPodcast) {
@@ -86,7 +85,7 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
         );
         const data = await response.json();
         
-        // Filter out the podcast itself and only keep episodes
+        // filter out the podcast itself and only keep episodes
         const episodesList = data.results
           .filter(item => item.wrapperType === 'podcastEpisode')
           .map(item => ({
@@ -95,12 +94,11 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
             releaseDate: new Date(item.releaseDate),
             duration: item.trackTimeMillis
           }))
-          .sort((a, b) => b.releaseDate - a.releaseDate); // Sort by newest first
+          .sort((a, b) => b.releaseDate - a.releaseDate); //sort by newest first
         
         setEpisodes(episodesList);
       } catch (error) {
         console.error('Error fetching episodes:', error);
-        // Show empty results but don't crash
         setEpisodes([]);
       } finally {
         setIsLoadingEpisodes(false);
@@ -110,7 +108,7 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
     fetchEpisodes();
   }, [selectedPodcast]);
 
-  // When both podcast and episode are selected, notify the parent component
+  // when both podcast and episode are selected, notify the parent component
   useEffect(() => {
     if (selectedPodcast && selectedEpisode) {
       onPodcastEpisodeSelected(selectedPodcast, selectedEpisode);
@@ -121,8 +119,8 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
     setSelectedPodcast(podcast);
     setPodcastSearch(podcast.name);
     setShowPodcastDropdown(false);
-    setSelectedEpisode(null); // Reset episode selection
-    setShowEpisodeDropdown(true); // Show episode dropdown after selecting podcast
+    setSelectedEpisode(null); // reset episode selection
+    setShowEpisodeDropdown(true); // show episode dropdown after selecting podcast
   };
 
   const handleEpisodeSelect = (episode) => {
@@ -130,7 +128,7 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
     setShowEpisodeDropdown(false);
   };
 
-  // Format duration from milliseconds to MM:SS
+  //format duration from milliseconds to MM:SS
   const formatDuration = (milliseconds) => {
     if (!milliseconds) return '';
     
@@ -141,7 +139,7 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Format date to a readable format
+  // format date to a readable format
   const formatDate = (date) => {
     if (!date) return '';
     
@@ -179,19 +177,22 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
             {isLoadingPodcasts ? (
               <ActivityIndicator color="#00c07f" size="small" />
             ) : podcasts.length > 0 ? (
-              <FlatList
-                data={podcasts}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
+              <ScrollView 
+                style={styles.scrollList}
+                contentContainerStyle={styles.scrollContent}
+                nestedScrollEnabled={true}
+                showsVerticalScrollIndicator={true}
+              >
+                {podcasts.map(item => (
                   <TouchableOpacity
+                    key={item.id.toString()}
                     style={styles.dropdownItem}
                     onPress={() => handlePodcastSelect(item)}
                   >
                     <Text style={styles.dropdownItemText}>{item.name}</Text>
                   </TouchableOpacity>
-                )}
-                style={styles.flatList}
-              />
+                ))}
+              </ScrollView>
             ) : podcastSearch.length >= 2 ? (
               <Text style={styles.noResultsText}>No podcasts found</Text>
             ) : null}
@@ -199,7 +200,7 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
         )}
       </View>
 
-      {/* Episode Selection - Only show if a podcast is selected */}
+      {/* episode Selection - only show if a podcast is selected */}
       {selectedPodcast && (
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Podcast Episode</Text>
@@ -217,11 +218,15 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
               {isLoadingEpisodes ? (
                 <ActivityIndicator color="#00c07f" size="small" />
               ) : episodes.length > 0 ? (
-                <FlatList
-                  data={episodes}
-                  keyExtractor={(item) => item.id.toString()}
-                  renderItem={({ item }) => (
+                <ScrollView 
+                  style={styles.scrollList}
+                  contentContainerStyle={styles.scrollContent}
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={true}
+                >
+                  {episodes.map(item => (
                     <TouchableOpacity
+                      key={item.id.toString()}
                       style={styles.dropdownItem}
                       onPress={() => handleEpisodeSelect(item)}
                     >
@@ -230,9 +235,8 @@ const PodcastSelector = ({ onPodcastEpisodeSelected }) => {
                         {formatDate(item.releaseDate)} • {formatDuration(item.duration)}
                       </Text>
                     </TouchableOpacity>
-                  )}
-                  style={styles.flatList}
-                />
+                  ))}
+                </ScrollView>
               ) : (
                 <Text style={styles.noResultsText}>No episodes found</Text>
               )}
@@ -269,7 +273,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   placeholderText: {
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: 'rgba(255, 255, 255, 0.94)',
   },
   dropdown: {
     position: 'absolute',
@@ -278,14 +282,18 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#1a2234',
     borderRadius: 8,
-    maxHeight: 200,
+    maxHeight: 250,
     zIndex: 10,
     elevation: 5,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden',
   },
-  flatList: {
-    maxHeight: 200,
+  scrollList: {
+    maxHeight: 250,
+  },
+  scrollContent: {
+    paddingVertical: 4,
   },
   dropdownItem: {
     paddingHorizontal: 16,

@@ -6,15 +6,54 @@ import CreateAccountPage from './src/components/CreateAccountPage';
 import ScreenshotPage from './src/components/ScreenshotPage';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 
-const API_URL = 'http://192.168.1.232:4000';
+const API_URL = 'http://192.168.12.22:4000';
+
+//#TODO: delete (check if the backend server is available)
+const checkBackendServer = async () => {
+  try {
+    const response = await fetch(API_URL, { 
+      method: 'GET',
+      timeout: 5000
+    });
+    console.log('Backend server check:', response.status);
+    return true;
+  } catch (error) {
+    console.error('Backend server check failed:', error);
+    return false;
+  }
+};
 
 function AppContent() {
   const { user, loading, signInWithGoogle, signOut } = useAuth();
   const [currentPage, setCurrentPage] = useState('screenshotPage');
   const [screenshotUri, setScreenshotUri] = useState(null);
   const [responseData, setResponseData] = useState(null);
+  const [selectedPodcast, setSelectedPodcast] = useState(null);
+  const [selectedEpisode, setSelectedEpisode] = useState(null);
+  const [isBackendAvailable, setIsBackendAvailable] = useState(false);
 
-  // Check if user is already logged in
+  // #TODO: delete (check if the backend server is available when the component mounts)
+  useEffect(() => {
+    const checkServer = async () => {
+      const isAvailable = await checkBackendServer();
+      setIsBackendAvailable(isAvailable);
+      if (!isAvailable) {
+        setResponseData({ 
+          status: 'error', 
+          message: `Cannot connect to backend server at ${API_URL}. Please check if the server is running and accessible.` 
+        });
+      }
+    };
+    
+    checkServer();
+    
+    // check server availability every 30 seconds
+    const intervalId = setInterval(checkServer, 30000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
+
+  //check if user is already logged in
   useEffect(() => {
     if (user && currentPage !== 'main') {
       setCurrentPage('main');
@@ -97,13 +136,41 @@ function AppContent() {
     }
   };
 
-  const uploadScreenshot = async () => {
+  const handlePodcastEpisodeSelected = (podcast, episode) => {
+    setSelectedPodcast(podcast);
+    setSelectedEpisode(episode);
+  };
+
+  const uploadScreenshot = async (podcast, episode) => {
     if (!screenshotUri) {
       Alert.alert('No image selected', 'Pick a screenshot first.');
       return;
     }
+
+    // Check if podcast and episode are selected
+    const podcastToUse = podcast || selectedPodcast;
+    const episodeToUse = episode || selectedEpisode;
+
+    if (!podcastToUse || !episodeToUse) {
+      Alert.alert('Selection required', 'Please select both a podcast and an episode before processing.');
+      return;
+    }
     
     try {
+      //  #TODO: delete (check if the backend server is available)
+      if (!isBackendAvailable) {
+        const isAvailable = await checkBackendServer();
+        setIsBackendAvailable(isAvailable);
+        
+        if (!isAvailable) {
+          setResponseData({ 
+            status: 'error', 
+            message: `Cannot connect to backend server at ${API_URL}. Please check if the server is running and accessible.` 
+          });
+          return;
+        }
+      }
+      
       setResponseData({ status: 'uploading', message: 'Processing your screenshot...' });
       
       const formData = new FormData();
@@ -112,6 +179,9 @@ function AppContent() {
         type: 'image/png',
         name: 'screenshot.png'
       });
+      
+      formData.append('podcastName', podcastToUse.name);
+      formData.append('episodeName', episodeToUse.name);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -178,6 +248,7 @@ function AppContent() {
           onPickImage={pickImage}
           onUploadScreenshot={uploadScreenshot}
           onSignOut={handleSignOut}
+          onPodcastEpisodeSelected={handlePodcastEpisodeSelected}
         />
       );
     }

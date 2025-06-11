@@ -64,7 +64,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 const app = express();
-const PORT = 8000;
+const PORT = 4000;
 
 // public directory for audio files if it doesn't exist
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -544,6 +544,12 @@ app.post(
 
     console.log("Screenshot received:", req.file.path);
     const screenshotPath = req.file.path;
+    
+    //from request body
+    const podcastName = req.body.podcastName;
+    const episodeName = req.body.episodeName;
+    
+    console.log("Podcast information received:", { podcastName, episodeName });
 
     try {
       // detect playback bar region
@@ -573,16 +579,16 @@ app.post(
         timestamp = timestampMatch[0];
       }
       
-      // if template extraction failed, use Gemini as backup
-      if (!podcast || !episode || !timestamp) {
+      if (podcastName && episodeName) {
+        podcast = podcastName;
+        episode = episodeName;
+      } 
+      // Otherwise, if template extraction failed, use Gemini as backup
+      else if (!podcast || !episode || !timestamp) {
         const geminiResults = await parseWithGemini(screenshotPath);
-        podcast = geminiResults.podcast || "";
-        episode = geminiResults.episode || "";
-        timestamp = geminiResults.timestamp || "";
-        //#TODO
-        // podcast = podcast || geminiResults.podcast || "";
-        // episode = episode || geminiResults.episode || "";
-        // timestamp = timestamp || geminiResults.timestamp || "";
+        podcast = podcast || geminiResults.podcast || "";
+        episode = episode || geminiResults.episode || "";
+        timestamp = timestamp || geminiResults.timestamp || "";
       }
 
       const guessedTitle = podcast || "";
@@ -601,8 +607,7 @@ app.post(
       }
 
       // 2) iTunes => feedUrl => parse => MP3
-      console.log("Searching iTunes for:", guessedTitle);
-      // const feedUrl = await getFeedUrlFromiTunes(guessedTitle);
+      console.log("Searching iTunes for podcast:", podcast, "episode:", episode);
       const feedUrl = await getFeedUrlFromiTunes(podcast, episode);
       console.log("Found feed URL:", feedUrl);
 
