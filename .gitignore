@@ -17,6 +17,10 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Native directories (for CNG / Prebuild)
+/android
+/ios
+
 # Metro
 .metro-health-check*
 
