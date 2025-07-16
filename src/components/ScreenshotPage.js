@@ -7,7 +7,8 @@ import {
   Image,
   StatusBar,
   ScrollView,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import PodcastGrid from './PodcastGrid';
 import PodcastSelector from './PodcastSelector';
@@ -18,7 +19,8 @@ const ScreenshotPage = ({
   onPickImage, 
   onUploadScreenshot,
   onSignOut,
-  onPodcastEpisodeSelected
+  onPodcastEpisodeSelected,
+  isProcessingSharedContent = false
 }) => {
   const [selectedPodcast, setSelectedPodcast] = useState(null);
   const [selectedEpisode, setSelectedEpisode] = useState(null);
@@ -71,6 +73,14 @@ const ScreenshotPage = ({
       
       {/* dark overlay */}
       <View style={styles.darkOverlay} />
+      
+      {/* Loading overlay for shared content */}
+      {isProcessingSharedContent && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#00c07f" />
+          <Text style={styles.loadingText}>Processing shared screenshot...</Text>
+        </View>
+      )}
       
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header with sign out */}
@@ -287,6 +297,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontFamily: 'monospace',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 22, 36, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  loadingText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 20,
   },
 });
 

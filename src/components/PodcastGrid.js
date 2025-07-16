@@ -16,11 +16,6 @@ const PodcastGrid = () => {
     { id: 10, source: require('../../assets/GridImages/download(4).jpeg') },
     { id: 11, source: require('../../assets/GridImages/download.jpeg') },
     { id: 12, source: require('../../assets/GridImages/image.jpg') },
-    { id: 13, source: require('../../assets/GridImages/download(1).png') },
-    { id: 14, source: require('../../assets/GridImages/download(2).png') },
-    { id: 15, source: require('../../assets/GridImages/download(3).png') },
-    { id: 16, source: require('../../assets/GridImages/download(4).png') },
-    { id: 17, source: require('../../assets/GridImages/download.png') },
   ];
 
   // shuffle the array to get a random arrangement of podcast images
