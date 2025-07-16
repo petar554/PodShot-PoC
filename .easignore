@@ -1,0 +1,66 @@
+# Dependencies (will be reinstalled during build)
+node_modules/
+android
+
+# Development and build artifacts
+.expo/
+dist/
+build/
+*.log
+*.tmp
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Git
+.git/
+.gitignore
+
+# Documentation and readme files
+README.md
+CHANGELOG.md
+docs/
+*.md
+
+# Test files
+__tests__/
+**/*.test.js
+**/*.test.ts
+**/*.spec.js
+**/*.spec.ts
+jest.config.js
+coverage/
+
+# Development configuration
+.eslintrc*
+.prettierrc*
+babel.config.js (if not needed for build)
+
+# Large media files (if not needed in app)
+assets/videos/
+assets/large-images/
+
+# Environment files (use EAS secrets instead)
+.env.local
+.env.development
+
+# Yarn/npm
+yarn-error.log
+npm-debug.log*
+.npm
+.yarn/
+
+# TypeScript
+*.tsbuildinfo

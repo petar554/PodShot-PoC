@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { useShareIntent } from 'expo-share-intent';
 import LandingPage from './src/components/LandingPage';
 import CreateAccountPage from './src/components/CreateAccountPage';
 import ScreenshotPage from './src/components/ScreenshotPage';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 
-const API_URL = 'http://192.168.12.22:4000';
+const API_URL = 'http://192.168.143.22:4000';
 
 //#TODO: delete (check if the backend server is available)
 const checkBackendServer = async () => {
@@ -31,6 +32,53 @@ function AppContent() {
   const [selectedPodcast, setSelectedPodcast] = useState(null);
   const [selectedEpisode, setSelectedEpisode] = useState(null);
   const [isBackendAvailable, setIsBackendAvailable] = useState(false);
+  const [isProcessingSharedContent, setIsProcessingSharedContent] = useState(false);
+
+  // Use expo-share-intent hook
+  const { hasShareIntent, shareIntent, resetShareIntent, error } = useShareIntent({
+    debug: true,
+    resetOnBackground: true,
+  });
+
+  // Handle shared content when the app starts or receives new share intent
+  useEffect(() => {
+    if (hasShareIntent && shareIntent) {
+      console.log('Share intent received:', shareIntent);
+      setIsProcessingSharedContent(true);
+      
+      // Handle different types of shared content
+      if (shareIntent.type === 'media' && shareIntent.files && shareIntent.files.length > 0) {
+        const sharedFile = shareIntent.files[0];
+        console.log('Shared file:', sharedFile);
+        
+        // Check if it's an image
+        if (sharedFile.mimeType && sharedFile.mimeType.startsWith('image/')) {
+          setScreenshotUri(sharedFile.path);
+          setCurrentPage('screenshotPage');
+          console.log('Image shared successfully:', sharedFile.path);
+        } else {
+          Alert.alert('Unsupported File', 'Please share an image file.');
+        }
+      } else if (shareIntent.type === 'text' && shareIntent.text) {
+        // Handle text sharing if needed
+        console.log('Text shared:', shareIntent.text);
+        Alert.alert('Text Shared', 'Text sharing is not supported. Please share an image.');
+      }
+      
+      setIsProcessingSharedContent(false);
+      // Reset the share intent after processing
+      resetShareIntent();
+    }
+  }, [hasShareIntent, shareIntent, resetShareIntent]);
+
+  // Handle share intent errors
+  useEffect(() => {
+    if (error) {
+      console.error('Share intent error:', error);
+      Alert.alert('Share Error', 'Failed to process shared content: ' + error.message);
+      setIsProcessingSharedContent(false);
+    }
+  }, [error]);
 
   // #TODO: delete (check if the backend server is available when the component mounts)
   useEffect(() => {
@@ -249,6 +297,7 @@ function AppContent() {
           onUploadScreenshot={uploadScreenshot}
           onSignOut={handleSignOut}
           onPodcastEpisodeSelected={handlePodcastEpisodeSelected}
+          isProcessingSharedContent={isProcessingSharedContent}
         />
       );
     }
